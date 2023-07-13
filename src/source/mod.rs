@@ -2,8 +2,10 @@ use cpal::SampleFormat;
 
 use crate::sample_buffer::SampleBufferMut;
 
-pub mod symph;
+use eyre::Result;
+
 pub mod sine;
+pub mod symph;
 
 /// Information needed to properly play sound
 pub struct DeviceInfo {
@@ -17,9 +19,9 @@ pub trait Source: Send {
     /// Delivers info to the source, read is not called before init
     ///
     /// Init may be called multiple times to update the info
-    fn init(&mut self, info: &DeviceInfo);
+    fn init(&mut self, info: &DeviceInfo) -> Result<()>;
 
     /// Reads data from the source into the buffer, returns number of written
     /// samples
-    fn read(&mut self, buffer: &mut SampleBufferMut) -> usize;
+    fn read(&mut self, buffer: &mut SampleBufferMut) -> (usize, Result<()>);
 }

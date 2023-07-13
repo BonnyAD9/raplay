@@ -6,6 +6,8 @@ use crate::{operate_samples, sample_buffer::SampleBufferMut};
 
 use super::Source;
 
+use eyre::Result;
+
 /// Source of sine waves
 pub struct SineSource {
     frequency: f32,
@@ -15,15 +17,16 @@ pub struct SineSource {
 }
 
 impl Source for SineSource {
-    fn init(&mut self, info: &super::DeviceInfo) {
+    fn init(&mut self, info: &super::DeviceInfo) -> Result<()> {
         self.channels = info.channel_count;
         self.iter_step = 2. * PI * self.frequency / info.sample_rate as f32;
+        Ok(())
     }
 
-    fn read(&mut self, buffer: &mut SampleBufferMut) -> usize {
+    fn read(&mut self, buffer: &mut SampleBufferMut) -> (usize, Result<()>) {
         operate_samples!(buffer, b, {
             self.generate(b);
-            b.len()
+            (b.len(), Ok(()))
         })
     }
 }

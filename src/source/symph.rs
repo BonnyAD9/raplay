@@ -3,7 +3,9 @@ use symphonia::{
     core::{
         audio::SampleBuffer,
         codecs::Decoder,
-        io::{MediaSource, MediaSourceStream, MediaSourceStreamOptions},
+        io::{
+            MediaSource, MediaSourceStream, MediaSourceStreamOptions
+        },
         probe::ProbeResult,
     },
     default::{get_codecs, get_probe},
@@ -74,12 +76,13 @@ impl Symph {
 }
 
 impl Source for Symph {
-    fn init(&mut self, info: &super::DeviceInfo) {
+    fn init(&mut self, info: &super::DeviceInfo) -> Result<()> {
         self.target_sample_rate = info.sample_rate;
         self.target_channels = info.channel_count;
+        Ok(())
     }
 
-    fn read(&mut self, buffer: &mut SampleBufferMut) -> usize {
+    fn read(&mut self, buffer: &mut SampleBufferMut) -> (usize, Result<()>) {
         operate_samples!(buffer, b, self.decode(*b))
     }
 }
@@ -88,7 +91,7 @@ impl Symph {
     fn decode<T: cpal::Sample + cpal::FromSample<f32>>(
         &mut self,
         mut buffer: &mut [T],
-    ) -> usize {
+    ) -> (usize, Result<()>) {
         // TODO: no temp buffer
         let mut readed = 0;
 
@@ -101,18 +104,23 @@ impl Symph {
 
         while buffer.len() > 0 {
             let packet = loop {
-                if let Ok(p) = self.probed.format.next_packet() {
-                    if p.track_id() != self.track_id {
-                        continue;
+                match self.probed.format.next_packet() {
+                    Ok(p) => {
+                        if p.track_id() != self.track_id {
+                            continue;
+                        }
+                        break p;
                     }
-                    break p;
+                    // TODO: check for ResetRequired
+                    Err(e) => return (0, Err(Report::new(e))),
                 }
-                // TODO: check for ResetRequired
-                return 0;
             };
 
-            // TODO: remove unwrap
-            let data = self.decoder.decode(&packet).unwrap();
+            let data = match self.decoder.decode(&packet) {
+                Ok(d) => d,
+                Err(e) => return (readed, Err(Report::new(e))),
+            };
+
             self.source_sample_rate = data.spec().rate;
             self.source_channels = data.spec().channels.count() as u32;
 
@@ -133,7 +141,7 @@ impl Symph {
             readed += i;
         }
 
-        readed
+        (readed, Ok(()))
     }
 
     /// self.buffer must be some

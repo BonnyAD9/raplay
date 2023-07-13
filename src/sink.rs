@@ -1,23 +1,64 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
-    SampleFormat, Stream
+    SampleFormat, Stream,
 };
 use eyre::{Report, Result};
 
-use crate::{operate_samples, sample_buffer::SampleBufferMut, source::{Source, DeviceInfo}};
+use crate::{
+    operate_samples,
+    sample_buffer::SampleBufferMut,
+    source::{DeviceInfo, Source},
+};
 
 /// A player that can play `Source`
 pub struct Sink {
-    controls: Arc<Mutex<Controls>>,
+    shared: Arc<SharedData>,
     #[allow(dead_code)]
     stream: Stream,
     info: DeviceInfo,
 }
 
+struct SharedData {
+    controls: Mutex<Controls>,
+    source: Mutex<Option<Box<dyn Source>>>,
+    callback: Mutex<Option<Box<dyn FnMut(CallbackInfo) + Send>>>,
+    err_callback: Mutex<Option<Box<dyn FnMut(ErrCallbackInfo) + Send>>>,
+}
+
+/// Callback type and asociated information
+#[non_exhaustive]
+pub enum CallbackInfo {
+    /// Invoked when the current source has reached end
+    SourceEnded,
+}
+
+#[non_exhaustive]
+pub enum ErrSource {
+    /// Errors from `cpal`
+    Playback,
+    /// Errors from the current source
+    Source,
+    /// Errors from the sink
+    Sink,
+}
+
+/// Error source and the original error as `eyre::Report`
+pub struct ErrCallbackInfo {
+    /// The part which failed
+    pub source: ErrSource,
+    /// The original error as Report
+    pub err: Report,
+}
+
+#[derive(Clone)]
 struct Controls {
-    source: Option<Box<dyn Source>>,
+    play: bool,
+}
+
+struct Mixer {
+    shared: Arc<SharedData>,
 }
 
 impl Sink {
@@ -44,30 +85,31 @@ impl Sink {
 
         let config = config.into();
 
-        let controls = Arc::new(Mutex::new(Controls { source: None }));
-        let cap_controls = controls.clone();
+        let shared = Arc::new(SharedData {
+            controls: Mutex::new(Controls { play: false }),
+            source: Mutex::new(None),
+            callback: Mutex::new(None),
+            err_callback: Mutex::new(None),
+        });
 
-        let err = |e| { println!("{e}") };
+        let mut mixer = Mixer {
+            shared: shared.clone(),
+        };
+
+        let shared_clone = shared.clone();
 
         macro_rules! arm {
             ($t:ident, $e:ident) => {
                 device.build_output_stream(
                     &config,
                     move |d: &mut [$t], _| {
-                        if cap_controls
-                            .as_ref()
-                            .lock()
-                            .as_mut()
-                            .and_then(|c| {
-                                c.write_source(&mut SampleBufferMut::$e(d));
-                                Ok(())
-                            })
-                            .is_err()
-                        {
-                            write_silence(d);
-                        }
+                        mixer.mix(&mut SampleBufferMut::$e(d))
                     },
-                    err,
+                    move |e| {
+                        _ = shared_clone.invoke_err_callback(
+                            ErrCallbackInfo::playback(Report::new(e)),
+                        );
+                    },
                     //Some(Duration::from_millis(5)),
                     None,
                 )
@@ -89,18 +131,91 @@ impl Sink {
                 // TODO: select other format when this is not supported
                 return Err(Report::msg(
                     "Unsupported sample format '{sample_format}'",
-                ))
+                ));
             }
         }?;
 
         stream.play()?;
 
-        let sink = Sink { controls, stream, info };
+        let sink = Sink {
+            shared,
+            stream,
+            info,
+        };
 
         Ok(sink)
     }
 
-    /// Discards the old source and starts playing the given source
+    /// Sets the callback method.
+    ///
+    /// The function is called when the source ends.
+    ///
+    /// The function is called from another thread.
+    ///
+    /// # Errors
+    /// - another user of one of the used mutexes panicked while using it
+    /// - source fails to init
+    ///
+    /// # Panics
+    /// - the current thread already locked one of the used mutexes and didn't
+    ///   release them
+    pub fn on_callback(&self, callback: Option<impl FnMut(CallbackInfo) + Send + 'static>) -> Result<()> {
+        (*self.shared.callback()?) = match callback {
+            Some(c) => Some(Box::new(c)),
+            None => None
+        };
+        Ok(())
+    }
+
+    /// Sets the error callback method.
+    ///
+    /// The funciton is called when an error occures on another thread.
+    ///
+    /// The function is called from another thread.
+    ///
+    /// # Errors
+    /// - another user of one of the used mutexes panicked while using it
+    /// - source fails to init
+    ///
+    /// # Panics
+    /// - the current thread already locked one of the used mutexes and didn't
+    ///   release them
+    pub fn on_err_callback(&self, callback: Option<impl FnMut(ErrCallbackInfo) + Send + 'static>) -> Result<()> {
+        (*self.shared.err_callback()?) = match callback {
+            Some(c) => Some(Box::new(c)),
+            None => None
+        };
+        Ok(())
+    }
+
+    /// Discards the old source and sets the new source. Starts playing if
+    /// `play` is set to true.
+    ///
+    /// # Errors
+    /// - another user of one of the used mutexes panicked while using it
+    /// - source fails to init
+    ///
+    /// # Panics
+    /// - the current thread already locked one of the used mutexes and didn't
+    ///   release them
+    pub fn load(
+        &self,
+        mut src: impl Source + 'static,
+        play: bool,
+    ) -> Result<()> {
+        src.init(&self.info)?;
+
+        let mut controls = self.shared.controls()?;
+        let mut source = self.shared.source()?;
+
+        controls.play = play;
+        *source = Some(Box::new(src));
+
+        Ok(())
+    }
+
+    /// Resumes the playback of the current source if `play` is true, otherwise
+    /// pauses the playback.
     ///
     /// # Errors
     /// - another user of one of the used mutexes panicked while using it
@@ -108,31 +223,174 @@ impl Sink {
     /// # Panics
     /// - the current thread already locked one of the used mutexes and didn't
     ///   release them
-    pub fn play(&self, mut src: impl Source + 'static) -> Result<()> {
-        src.init(&self.info);
-        match self.controls.lock().and_then(|mut c| {
-            c.source = Some(Box::new(src));
-            Ok(())
-        }) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(Report::msg(e.to_string())),
-        }
+    pub fn play(&self, play: bool) -> Result<()> {
+        self.shared.controls()?.play = play;
+        Ok(())
+    }
+
+    /// Pauses the playback of the current source
+    ///
+    /// # Errors
+    /// - another user of one of the used mutexes panicked while using it
+    ///
+    /// # Panics
+    /// - the current thread already locked one of the used mutexes and didn't
+    ///   release them
+    pub fn pause(&self) -> Result<()> {
+        self.play(false)
+    }
+
+    /// Resumes the playback of the current source
+    ///
+    /// # Errors
+    /// - another user of one of the used mutexes panicked while using it
+    ///
+    /// # Panics
+    /// - the current thread already locked one of the used mutexes and didn't
+    ///   release them
+    pub fn resume(&self) -> Result<()> {
+        self.play(true)
+    }
+
+    /// Returns true if the source is playing, otherwise returns false
+    ///
+    /// # Errors
+    /// - another user of one of the used mutexes panicked while using it
+    ///
+    /// # Panics
+    /// - the current thread already locked one of the used mutexes and didn't
+    ///   release them
+    pub fn is_playing(&self) -> Result<bool> {
+        Ok(self.shared.controls()?.play)
     }
 }
 
-impl Controls {
-    fn write_source(&mut self, data: &mut SampleBufferMut) {
-        if self.source.is_some() {
-            let mut src = self.source.take().unwrap();
-            let i = src.read(data);
-            operate_samples!(data, d, write_silence(&mut d[i..]));
-            self.source = Some(src)
+impl Mixer {
+    fn mix(&mut self, data: &mut SampleBufferMut) {
+        if let Err(e) = self.try_mix(data) {
+            self.silence(data);
+            _ = self
+                .shared
+                .invoke_err_callback(ErrCallbackInfo::sink(e));
+        }
+    }
+
+    fn try_mix(&mut self, data: &mut SampleBufferMut) -> Result<()> {
+        let controls = { self.shared.controls()?.clone() };
+
+        if controls.play {
+            self.play_source(data)?;
         } else {
-            operate_samples!(data, d, write_silence(*d))
+            self.silence(data)
         }
+
+        Ok(())
+    }
+
+    fn play_source(&mut self, data: &mut SampleBufferMut) -> Result<()> {
+        let mut src = self.shared.source()?;
+
+        match src.as_mut() {
+            Some(s) => {
+                let (cnt, e) = s.read(data);
+
+                if let Err(e) = e {
+                    _ = self
+                        .shared
+                        .invoke_err_callback(ErrCallbackInfo::source(e));
+                }
+
+                operate_samples!(data, d, {
+                    Self::write_silence(&mut d[cnt..]);
+                    if cnt < d.len() {
+                        *src = None;
+                        self.shared.invoke_callback(CallbackInfo::SourceEnded)
+                    } else {
+                        Ok(())
+                    }
+                })
+            }
+            None => {
+                self.silence(data);
+                Ok(())
+            }
+        }
+    }
+
+    fn silence(&self, data: &mut SampleBufferMut) {
+        operate_samples!(data, d, Self::write_silence(d));
+    }
+
+    fn write_silence<T: cpal::Sample>(data: &mut [T]) {
+        data.fill(T::EQUILIBRIUM);
     }
 }
 
-fn write_silence<T: cpal::Sample>(data: &mut [T]) {
-    data.fill(T::EQUILIBRIUM);
+impl SharedData {
+    fn controls(&self) -> Result<MutexGuard<'_, Controls>> {
+        self.controls
+            .lock()
+            .or_else(|e| Err(Report::msg(e.to_string())))
+    }
+
+    fn source(&self) -> Result<MutexGuard<'_, Option<Box<dyn Source>>>> {
+        self.source
+            .lock()
+            .or_else(|e| Err(Report::msg(e.to_string())))
+    }
+
+    fn callback(
+        &self,
+    ) -> Result<MutexGuard<'_, Option<Box<dyn FnMut(CallbackInfo) + Send>>>>
+    {
+        self.callback
+            .lock()
+            .or_else(|e| Err(Report::msg(e.to_string())))
+    }
+
+    fn err_callback(
+        &self,
+    ) -> Result<MutexGuard<'_, Option<Box<dyn FnMut(ErrCallbackInfo) + Send>>>>
+    {
+        self.err_callback
+            .lock()
+            .or_else(|e| Err(Report::msg(e.to_string())))
+    }
+
+    fn invoke_callback(&self, args: CallbackInfo) -> Result<()> {
+        if let Some(cb) = self.callback()?.as_mut() {
+            cb(args)
+        }
+        Ok(())
+    }
+
+    fn invoke_err_callback(&self, args: ErrCallbackInfo) -> Result<()> {
+        if let Some(cb) = self.err_callback()?.as_mut() {
+            cb(args)
+        }
+        Ok(())
+    }
+}
+
+impl ErrCallbackInfo {
+    pub fn playback(err: Report) -> Self {
+        ErrCallbackInfo {
+            source: ErrSource::Playback,
+            err
+        }
+    }
+
+    pub fn source(err: Report) -> Self {
+        ErrCallbackInfo {
+            source: ErrSource::Source,
+            err
+        }
+    }
+
+    pub fn sink(err: Report) -> Self {
+        ErrCallbackInfo {
+            source: ErrSource::Sink,
+            err
+        }
+    }
 }
