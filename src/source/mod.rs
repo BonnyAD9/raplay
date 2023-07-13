@@ -1,12 +1,22 @@
-mod symph;
+use cpal::SampleFormat;
 
-pub trait Source: Iterator<Item = f32> {
-    // the sample rate
-    fn sample_rate(&self) -> u32;
+use crate::sample_buffer::SampleBufferMut;
 
-    // returns the number of samples remaining in the frame
-    fn frame_length(&self) -> u32;
+pub mod symph;
+pub mod sine;
 
-    // returns the number of channels
-    fn channels(&self) -> u32;
+pub struct DeviceInfo {
+    channel_count: u32,
+    sample_rate: u32,
+    sample_format: SampleFormat,
+}
+
+pub trait Source: Send {
+    // delivers info to the source, read is not called before init
+    // init may be called multiple times to update the info
+    fn init(&mut self, info: &DeviceInfo);
+
+    // reads data from the source into the buffer, returns number of written
+    // items
+    fn read(&mut self, buffer: &mut SampleBufferMut) -> usize;
 }
