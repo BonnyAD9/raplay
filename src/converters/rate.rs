@@ -7,7 +7,7 @@ pub struct RateConverter<I: Iterator<Item = f32>> {
 }
 
 impl<I: Iterator<Item = f32>> RateConverter<I> {
-    pub fn new(mut source: I, source_rate: u32, target_rate: u32) -> Self {
+    pub fn new(source: I, source_rate: u32, target_rate: u32) -> Self {
         RateConverter {
             source,
             ratio: target_rate as f32 / source_rate as f32,

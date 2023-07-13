@@ -5,12 +5,10 @@ pub mod source;
 
 #[cfg(test)]
 mod tests {
-    use std::{fs::File, thread, time::Duration};
+    use std::fs::File;
 
-    use crate::{sink::Sink, source::{symph::Symph, sine::SineSource}};
+    use crate::{sink::Sink, source::symph::Symph};
     use eyre::Result;
-
-    use super::*;
 
     #[test]
     fn play_audio() -> Result<()> {
@@ -19,7 +17,6 @@ mod tests {
         sink.play(src)?;
         //thread::sleep(Duration::from_secs(5));
         loop {}
-        Ok(())
     }
 
     /*#[test]

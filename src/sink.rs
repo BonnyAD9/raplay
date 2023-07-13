@@ -1,18 +1,17 @@
-use std::{
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::sync::{Arc, Mutex};
 
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
-    SampleFormat, Stream, Device, StreamConfig,
+    SampleFormat, Stream
 };
 use eyre::{Report, Result};
 
 use crate::{operate_samples, sample_buffer::SampleBufferMut, source::{Source, DeviceInfo}};
 
+/// A player that can play `Source`
 pub struct Sink {
     controls: Arc<Mutex<Controls>>,
+    #[allow(dead_code)]
     stream: Stream,
     info: DeviceInfo,
 }
@@ -22,6 +21,8 @@ struct Controls {
 }
 
 impl Sink {
+    /// Creates the player from the default audio output device with the
+    /// default configuration
     pub fn default_out() -> Result<Sink> {
         let device = cpal::default_host()
             .default_output_device()
@@ -92,6 +93,7 @@ impl Sink {
         Ok(sink)
     }
 
+    /// Discards the old source and starts playing the given source
     pub fn play(&self, mut src: impl Source + 'static) -> Result<()> {
         src.init(&self.info);
         match self.controls.lock().and_then(|mut c| {

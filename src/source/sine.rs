@@ -6,6 +6,7 @@ use crate::{operate_samples, sample_buffer::SampleBufferMut};
 
 use super::Source;
 
+/// Source of sine waves
 pub struct SineSource {
     frequency: f32,
     channels: u32,
@@ -28,6 +29,8 @@ impl Source for SineSource {
 }
 
 impl SineSource {
+    /// Creates source that generates infinite sine wave with the given
+    /// frequency
     pub fn new(frequency: f32) -> Self {
         Self {
             frequency,

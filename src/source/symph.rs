@@ -16,6 +16,7 @@ use crate::{
 
 use super::Source;
 
+/// Source that decodes audio using symphonia decoder
 pub struct Symph {
     target_sample_rate: u32,
     target_channels: u32,
@@ -29,6 +30,7 @@ pub struct Symph {
 }
 
 impl Symph {
+    /// Tries to create a new `Symph`
     pub fn try_new<T: MediaSource + 'static>(source: T) -> Result<Symph> {
         let stream = MediaSourceStream::new(
             Box::new(source),
