@@ -5,14 +5,16 @@ use std::{
 
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
-    SampleFormat,
+    SampleFormat, Stream, Device, StreamConfig,
 };
 use eyre::{Report, Result};
 
-use crate::{operate_samples, sample_buffer::SampleBufferMut, source::Source};
+use crate::{operate_samples, sample_buffer::SampleBufferMut, source::{Source, DeviceInfo}};
 
 pub struct Sink {
     controls: Arc<Mutex<Controls>>,
+    stream: Stream,
+    info: DeviceInfo,
 }
 
 struct Controls {
@@ -26,12 +28,17 @@ impl Sink {
             .ok_or(Report::msg("No available output device"))?;
         let config = device.default_output_config()?;
         let sample_format = config.sample_format();
+
+        let info = DeviceInfo {
+            channel_count: config.channels() as u32,
+            sample_rate: config.sample_rate().0,
+            sample_format: config.sample_format(),
+        };
+
         let config = config.into();
 
-        let res = Sink {
-            controls: Arc::new(Mutex::new(Controls { source: None })),
-        };
-        let controls = res.controls.clone();
+        let controls = Arc::new(Mutex::new(Controls { source: None }));
+        let cap_controls = controls.clone();
 
         let err = |e| { println!("{e}") };
 
@@ -40,8 +47,7 @@ impl Sink {
                 device.build_output_stream(
                     &config,
                     move |d: &mut [$t], _| {
-                        println!("hi");
-                        if controls
+                        if cap_controls
                             .as_ref()
                             .lock()
                             .as_mut()
@@ -55,8 +61,8 @@ impl Sink {
                         }
                     },
                     err,
-                    Some(Duration::from_millis(5)),
-                    //None,
+                    //Some(Duration::from_millis(5)),
+                    None,
                 )
             };
         }
@@ -81,10 +87,13 @@ impl Sink {
 
         stream.play()?;
 
-        Ok(res)
+        let sink = Sink { controls, stream, info };
+
+        Ok(sink)
     }
 
-    pub fn play(&self, src: impl Source + 'static) -> Result<()> {
+    pub fn play(&self, mut src: impl Source + 'static) -> Result<()> {
+        src.init(&self.info);
         match self.controls.lock().and_then(|mut c| {
             c.source = Some(Box::new(src));
             Ok(())

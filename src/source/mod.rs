@@ -6,9 +6,9 @@ pub mod symph;
 pub mod sine;
 
 pub struct DeviceInfo {
-    channel_count: u32,
-    sample_rate: u32,
-    sample_format: SampleFormat,
+    pub channel_count: u32,
+    pub sample_rate: u32,
+    pub sample_format: SampleFormat,
 }
 
 pub trait Source: Send {
