@@ -117,6 +117,7 @@ impl Symph {
             }
 
             // TODO: compensate possible missing samples
+            self.buffer.as_mut().unwrap().copy_interleaved_ref(data);
 
             // self.buffer is always Some
             let i = self.read_buffer(&mut buffer, 0);
