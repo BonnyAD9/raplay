@@ -34,9 +34,9 @@ pub enum SampleBufferMut<'a> {
 }
 
 /// Does operation on the variant of the buffer
-/// 
+///
 /// you need to import SampleBufferMut for this to work
-#[macro_export]
+#[macro_export(local_inner_macros)]
 macro_rules! operate_samples {
     ($buf:expr, $id:ident, $op:expr) => {
         match $buf {

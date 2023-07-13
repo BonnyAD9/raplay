@@ -31,6 +31,11 @@ pub struct Symph {
 
 impl Symph {
     /// Tries to create a new `Symph`
+    ///
+    /// # Errors
+    /// - the format of the source cannot be determined
+    /// - no default track is found
+    /// - no decoder was found for the codec, insufficient codec parameters
     pub fn try_new<T: MediaSource + 'static>(source: T) -> Result<Symph> {
         let stream = MediaSourceStream::new(
             Box::new(source),
@@ -44,6 +49,7 @@ impl Symph {
             &Default::default(),
         )?;
 
+        // TODO: select other track if the default is unavailable
         let track = pres
             .format
             .default_track()

@@ -23,7 +23,13 @@ struct Controls {
 impl Sink {
     /// Creates the player from the default audio output device with the
     /// default configuration
+    ///
+    /// # Errors
+    /// - no default device found
+    /// - device became unavailable
+    /// - device uses unsupported sample format
     pub fn default_out() -> Result<Sink> {
+        // TODO: select device when the default device was not found
         let device = cpal::default_host()
             .default_output_device()
             .ok_or(Report::msg("No available output device"))?;
@@ -80,6 +86,7 @@ impl Sink {
             SampleFormat::F32 => arm!(f32, F32),
             SampleFormat::F64 => arm!(f64, F64),
             _ => {
+                // TODO: select other format when this is not supported
                 return Err(Report::msg(
                     "Unsupported sample format '{sample_format}'",
                 ))
@@ -94,6 +101,13 @@ impl Sink {
     }
 
     /// Discards the old source and starts playing the given source
+    ///
+    /// # Errors
+    /// - another user of one of the used mutexes panicked while using it
+    ///
+    /// # Panics
+    /// - the current thread already locked one of the used mutexes and didn't
+    ///   release them
     pub fn play(&self, mut src: impl Source + 'static) -> Result<()> {
         src.init(&self.info);
         match self.controls.lock().and_then(|mut c| {
