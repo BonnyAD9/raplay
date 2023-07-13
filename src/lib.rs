@@ -15,7 +15,7 @@ mod tests {
     #[test]
     fn play_audio() -> Result<()> {
         let sink = Sink::default_out()?;
-        let src = Symph::try_new(File::open("/home/kubas/Music/AJR - Neotheater - 01 Next Up Forever.flac")?)?;
+        let src = Symph::try_new(File::open("/home/kubas/Music/4tet - 1st - 02 How Deep Is Your Love.mp3")?)?;
         sink.play(src)?;
         //thread::sleep(Duration::from_secs(5));
         loop {}
