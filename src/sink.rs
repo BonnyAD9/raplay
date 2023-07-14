@@ -280,8 +280,6 @@ impl Sink {
             _ = self.build_out_stream(config);
         }
 
-        println!("{:?}", self.info);
-
         let mut controls = self.shared.controls()?;
         let mut source = self.shared.source()?;
 

@@ -6,7 +6,9 @@ use eyre::Result;
 
 pub mod sine;
 pub mod symph;
-
+// TODO: better selecting algorithm (if not sample rate at least channel count)
+// TODO: fallback sample format when unsupported sample rate
+// TODO: go back to reasonable settings when no prefered config
 /// Information needed to properly play sound
 #[derive(PartialEq, Debug)]
 pub struct DeviceConfig {
