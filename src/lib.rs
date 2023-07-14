@@ -15,7 +15,7 @@ mod tests {
 
     #[test]
     fn play_audio() -> Result<()> {
-        let sink = Sink::default_out()?;
+        let mut sink = Sink::default_out()?;
         let src = Symph::try_new(File::open(
             "/home/kubas/Music/Coldplay - A Head Full of Dreams - 11 Up&Up.flac",
         )?)?;

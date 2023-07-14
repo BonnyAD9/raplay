@@ -8,7 +8,8 @@ pub mod sine;
 pub mod symph;
 
 /// Information needed to properly play sound
-pub struct DeviceInfo {
+#[derive(PartialEq, Debug)]
+pub struct DeviceConfig {
     pub channel_count: u32,
     pub sample_rate: u32,
     pub sample_format: SampleFormat,
@@ -16,12 +17,17 @@ pub struct DeviceInfo {
 
 /// Source of audio samples
 pub trait Source: Send {
-    /// Delivers info to the source, read is not called before init
+    /// Delivers configuration to the source, read is not called before init
     ///
     /// Init may be called multiple times to update the info
-    fn init(&mut self, info: &DeviceInfo) -> Result<()>;
+    fn init(&mut self, info: &DeviceConfig) -> Result<()>;
 
     /// Reads data from the source into the buffer, returns number of written
     /// samples
     fn read(&mut self, buffer: &mut SampleBufferMut) -> (usize, Result<()>);
+
+    /// Gets the preffered configuration.
+    fn preffered_config(&self) -> Option<DeviceConfig> {
+        None
+    }
 }

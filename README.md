@@ -38,3 +38,5 @@ sink.load(src, true)?; // play the mp3 file
 ## Know issues
 - The sound is not clear when playing high sample rates relative to what
 is set by the device (192000Hz/41000Hz)
+    - this has now been fixed with a workaround and should not be problem
+      on most devices

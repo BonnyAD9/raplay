@@ -17,7 +17,7 @@ pub struct SineSource {
 }
 
 impl Source for SineSource {
-    fn init(&mut self, info: &super::DeviceInfo) -> Result<()> {
+    fn init(&mut self, info: &super::DeviceConfig) -> Result<()> {
         self.channels = info.channel_count;
         self.iter_step = 2. * PI * self.frequency / info.sample_rate as f32;
         Ok(())

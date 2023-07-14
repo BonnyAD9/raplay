@@ -1,7 +1,9 @@
 use cpal::{FromSample, Sample, I24, U24};
 use num::{Float, NumCast, ToPrimitive};
 
-use self::{channels::ChannelConverter, rate::RateConverter, interleave::Interleave};
+use self::{
+    channels::ChannelConverter, interleave::Interleave, rate::RateConverter,
+};
 
 ///! Useful conversions on samples
 pub mod channels;

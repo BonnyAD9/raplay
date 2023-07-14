@@ -1,4 +1,4 @@
-use cpal::{I24, U24};
+use cpal::{SampleFormat, I24, U24};
 use eyre::{Report, Result};
 use symphonia::{
     core::{
@@ -12,12 +12,14 @@ use symphonia::{
 };
 
 use crate::{
-    converters::{do_interleave_channels_rate, UniSample, interleave, do_channels_rate},
+    converters::{
+        do_channels_rate, do_interleave_channels_rate, interleave, UniSample,
+    },
     operate_samples,
     sample_buffer::SampleBufferMut,
 };
 
-use super::Source;
+use super::{DeviceConfig, Source};
 
 /// Source that decodes audio using symphonia decoder
 pub struct Symph {
@@ -75,7 +77,7 @@ impl Symph {
 }
 
 impl Source for Symph {
-    fn init(&mut self, info: &super::DeviceInfo) -> Result<()> {
+    fn init(&mut self, info: &DeviceConfig) -> Result<()> {
         self.target_sample_rate = info.sample_rate;
         self.target_channels = info.channel_count;
         Ok(())
@@ -83,6 +85,27 @@ impl Source for Symph {
 
     fn read(&mut self, buffer: &mut SampleBufferMut) -> (usize, Result<()>) {
         operate_samples!(buffer, b, self.decode(*b))
+    }
+
+    fn preffered_config(&self) -> Option<DeviceConfig> {
+        let dec = self.decoder.last_decoded();
+        let spec = dec.spec();
+        Some(DeviceConfig {
+            channel_count: spec.channels.count() as u32,
+            sample_rate: spec.rate,
+            sample_format: match dec {
+                AudioBufferRef::U8(_) => SampleFormat::U8,
+                AudioBufferRef::U16(_) => SampleFormat::U16,
+                AudioBufferRef::U24(_) => SampleFormat::F32,
+                AudioBufferRef::U32(_) => SampleFormat::U32,
+                AudioBufferRef::S8(_) => SampleFormat::I8,
+                AudioBufferRef::S16(_) => SampleFormat::I16,
+                AudioBufferRef::S24(_) => SampleFormat::F32,
+                AudioBufferRef::S32(_) => SampleFormat::I32,
+                AudioBufferRef::F32(_) => SampleFormat::F32,
+                AudioBufferRef::F64(_) => SampleFormat::F32,
+            },
+        })
     }
 }
 
@@ -145,13 +168,14 @@ impl Symph {
             ($mnam:ident, $map:expr, $src:ident) => {{
                 let mut len = 0;
                 let mut last_index = 0;
-                for s in do_channels_rate(interleave(
-                    $src.planes().planes().iter().map(|i| {
+                for s in do_channels_rate(
+                    interleave($src.planes().planes().iter().map(|i| {
                         let slice =
                             &i[start / self.source_channels as usize..];
                         len += slice.len();
                         slice.iter()
-                    })).map(|$mnam| {
+                    }))
+                    .map(|$mnam| {
                         last_index += 1;
                         $map
                     }),

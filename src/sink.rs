@@ -2,14 +2,15 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
-    SampleFormat, Stream,
+    SampleFormat, SampleRate, Stream, SupportedOutputConfigs,
+    SupportedStreamConfig,
 };
 use eyre::{Report, Result};
 
 use crate::{
     operate_samples,
     sample_buffer::SampleBufferMut,
-    source::{DeviceInfo, Source},
+    source::{DeviceConfig, Source},
 };
 
 /// A player that can play `Source`
@@ -17,7 +18,7 @@ pub struct Sink {
     shared: Arc<SharedData>,
     #[allow(dead_code)]
     stream: Stream,
-    info: DeviceInfo,
+    info: DeviceConfig,
 }
 
 struct SharedData {
@@ -77,7 +78,7 @@ impl Sink {
         let config = device.default_output_config()?;
         let sample_format = config.sample_format();
 
-        let info = DeviceInfo {
+        let info = DeviceConfig {
             channel_count: config.channels() as u32,
             sample_rate: config.sample_rate().0,
             sample_format: config.sample_format(),
@@ -146,6 +147,71 @@ impl Sink {
         Ok(sink)
     }
 
+    fn build_out_stream(
+        &mut self,
+        config: Option<DeviceConfig>,
+    ) -> Result<()> {
+        let device = cpal::default_host()
+            .default_input_device()
+            .ok_or(Report::msg("No available output device"))?;
+        let config = match config {
+            Some(c) => select_config(c, device.supported_output_configs()?)
+                .unwrap_or(device.default_output_config()?),
+            None => device.default_output_config()?,
+        };
+
+        self.info = DeviceConfig {
+            channel_count: config.channels() as u32,
+            sample_rate: config.sample_rate().0,
+            sample_format: config.sample_format(),
+        };
+
+        let shared = self.shared.clone();
+        let mut mixer = Mixer {
+            shared: shared.clone(),
+        };
+
+        let config = config.into();
+        macro_rules! arm {
+            ($t:ident, $e:ident) => {
+                device.build_output_stream(
+                    &config,
+                    move |d: &mut [$t], _| {
+                        mixer.mix(&mut SampleBufferMut::$e(d))
+                    },
+                    move |e| {
+                        _ = shared.invoke_err_callback(
+                            ErrCallbackInfo::playback(Report::new(e)),
+                        );
+                    },
+                    //Some(Duration::from_millis(5)),
+                    None,
+                )
+            };
+        }
+
+        self.stream = match self.info.sample_format {
+            SampleFormat::I8 => arm!(i8, I8),
+            SampleFormat::I16 => arm!(i16, I16),
+            SampleFormat::I32 => arm!(i32, I32),
+            SampleFormat::I64 => arm!(i64, I64),
+            SampleFormat::U8 => arm!(u8, U8),
+            SampleFormat::U16 => arm!(u16, U16),
+            SampleFormat::U32 => arm!(u32, U32),
+            SampleFormat::U64 => arm!(u64, U64),
+            SampleFormat::F32 => arm!(f32, F32),
+            SampleFormat::F64 => arm!(f64, F64),
+            _ => {
+                // TODO: select other format when this is not supported
+                return Err(Report::msg(
+                    "Unsupported sample format '{sample_format}'",
+                ));
+            }
+        }?;
+
+        Ok(())
+    }
+
     /// Sets the callback method.
     ///
     /// The function is called when the source ends.
@@ -205,14 +271,21 @@ impl Sink {
     /// - the current thread already locked one of the used mutexes and didn't
     ///   release them
     pub fn load(
-        &self,
+        &mut self,
         mut src: impl Source + 'static,
         play: bool,
     ) -> Result<()> {
-        src.init(&self.info)?;
+        let config = src.preffered_config();
+        if config.is_some() && *config.as_ref().unwrap() != self.info {
+            _ = self.build_out_stream(config);
+        }
+
+        println!("{:?}", self.info);
 
         let mut controls = self.shared.controls()?;
         let mut source = self.shared.source()?;
+
+        src.init(&self.info)?;
 
         controls.play = play;
         *source = Some(Box::new(src));
@@ -397,4 +470,33 @@ impl ErrCallbackInfo {
             err,
         }
     }
+}
+
+fn select_config(
+    prefered: DeviceConfig,
+    configs: SupportedOutputConfigs,
+) -> Option<SupportedStreamConfig> {
+    let mut selected = None;
+
+    for c in configs {
+        if c.min_sample_rate().0 <= prefered.sample_rate
+            && c.max_sample_rate().0 >= prefered.sample_rate
+        {
+            if c.channels() as u32 == prefered.channel_count {
+                if c.sample_format() == prefered.sample_format {
+                    selected = Some(c);
+                    break;
+                } else if selected.is_none()
+                    || selected.as_ref().unwrap().channels() as u32
+                        != prefered.channel_count
+                {
+                    selected = Some(c)
+                }
+            } else if selected.is_none() {
+                selected = Some(c)
+            }
+        }
+    }
+
+    selected.map(|s| s.with_sample_rate(SampleRate(prefered.sample_rate)))
 }
