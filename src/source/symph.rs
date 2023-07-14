@@ -12,9 +12,7 @@ use symphonia::{
 };
 
 use crate::{
-    converters::{
-        do_channels_rate, do_interleave_channels_rate, interleave, UniSample,
-    },
+    converters::{do_channels_rate, interleave, UniSample},
     operate_samples,
     sample_buffer::SampleBufferMut,
 };
