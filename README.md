@@ -34,3 +34,7 @@ let file = File::open("music.mp3")?; // open the mp3 file
 let src = Symph::try_new(file)?; // create a symphonia decoder source
 sink.load(src, true)?; // play the mp3 file
 ```
+
+## Know issues
+- The sound is not clear when playing high sample rates relative to what
+is set by the device (192000Hz/41000Hz)

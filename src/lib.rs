@@ -17,7 +17,7 @@ mod tests {
     fn play_audio() -> Result<()> {
         let sink = Sink::default_out()?;
         let src = Symph::try_new(File::open(
-            "/home/kubas/Music/4tet - 1st - 02 How Deep Is Your Love.mp3",
+            "/home/kubas/Music/Coldplay - A Head Full of Dreams - 11 Up&Up.flac",
         )?)?;
         sink.on_callback(Some(|_| println!("callback")))?;
         sink.on_err_callback(Some(|e: ErrCallbackInfo| {

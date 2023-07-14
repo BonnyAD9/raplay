@@ -12,7 +12,7 @@ use symphonia::{
 };
 
 use crate::{
-    converters::{do_interleave_channels_rate, UniSample},
+    converters::{do_interleave_channels_rate, UniSample, interleave, do_channels_rate},
     operate_samples,
     sample_buffer::SampleBufferMut,
 };
@@ -142,14 +142,18 @@ impl Symph {
         let mut i = 0;
 
         macro_rules! arm {
-            ($map:expr, $src:ident) => {{
+            ($mnam:ident, $map:expr, $src:ident) => {{
                 let mut len = 0;
-                for s in do_interleave_channels_rate(
+                let mut last_index = 0;
+                for s in do_channels_rate(interleave(
                     $src.planes().planes().iter().map(|i| {
                         let slice =
                             &i[start / self.source_channels as usize..];
                         len += slice.len();
-                        slice.iter().map($map)
+                        slice.iter()
+                    })).map(|$mnam| {
+                        last_index += 1;
+                        $map
                     }),
                     self.source_channels,
                     self.target_channels,
@@ -163,29 +167,30 @@ impl Symph {
                     }
                 }
 
-                self.buffer_start = if i + start == len {
+                self.buffer_start = if last_index == len {
                     None
                 } else {
-                    Some(i + start)
+                    Some(last_index)
                 }
             }};
         }
 
         match samples {
-            AudioBufferRef::U8(src) => arm!(|s| *s, src),
-            AudioBufferRef::U16(src) => arm!(|s| *s, src),
+            AudioBufferRef::U8(src) => arm!(s, *s, src),
+            AudioBufferRef::U16(src) => arm!(s, *s, src),
             AudioBufferRef::U24(src) => {
-                arm!(|s| U24::new(s.clamped().0 as i32).unwrap(), src)
+                arm!(s, U24::new(s.clamped().0 as i32).unwrap(), src)
             }
-            AudioBufferRef::U32(src) => arm!(|s| *s, src),
-            AudioBufferRef::S8(src) => arm!(|s| *s, src),
-            AudioBufferRef::S16(src) => arm!(|s| *s, src),
+            AudioBufferRef::U32(src) => arm!(s, *s, src),
+            AudioBufferRef::S8(src) => arm!(s, *s, src),
+            AudioBufferRef::S16(src) => arm!(s, *s, src),
             AudioBufferRef::S24(src) => {
-                arm!(|s| I24::new(s.clamped().0).unwrap(), src)
+                arm!(s, I24::new(s.clamped().0).unwrap(), src)
             }
-            AudioBufferRef::S32(src) => arm!(|s| *s, src),
-            AudioBufferRef::F32(src) => arm!(|s| *s, src),
-            AudioBufferRef::F64(src) => arm!(|s| *s, src),
+            AudioBufferRef::S32(src) => arm!(s, *s, src),
+            AudioBufferRef::F32(src) => arm!(s, *s, src),
+            AudioBufferRef::F64(src) => arm!(s, *s, src),
+            //AudioBufferRef::S32(src) => arm!(s, *s, src),
         }
 
         i

@@ -27,8 +27,8 @@ where
     ) -> Self {
         RateConverter {
             source,
-            ratio: <S::Float as NumCast>::from(target_rate).unwrap()
-                / <S::Float as NumCast>::from(source_rate).unwrap(),
+            ratio: <S::Float as NumCast>::from(source_rate).unwrap()
+                / <S::Float as NumCast>::from(target_rate).unwrap(),
             index: S::Float::zero(),
             a: None,
             b: None,

@@ -1,16 +1,18 @@
 use cpal::{FromSample, Sample, I24, U24};
 use num::{Float, NumCast, ToPrimitive};
 
+use self::{channels::ChannelConverter, rate::RateConverter, interleave::Interleave};
+
 ///! Useful conversions on samples
-mod channels;
-mod interleave;
-mod rate;
+pub mod channels;
+pub mod interleave;
+pub mod rate;
 
 /// Craetes iterator that interleaves the channels of `i`
-pub fn interleave<T>(
-    i: impl Iterator<Item = impl Iterator<Item = T>>,
-) -> impl Iterator<Item = T> {
-    interleave::Interleave::new(i)
+pub fn interleave<S, I: Iterator<Item = S>, II: Iterator<Item = I>>(
+    i: II,
+) -> Interleave<I, S> {
+    Interleave::new(i)
 }
 
 /// Creates iterator that converts the interleaved audio channel count of
@@ -19,8 +21,8 @@ pub fn channels<S: Sample, I: Iterator<Item = S>>(
     source: I,
     source_channels: u32,
     target_channels: u32,
-) -> impl Iterator<Item = S> {
-    channels::ChannelConverter::new(source, source_channels, target_channels)
+) -> ChannelConverter<S, I> {
+    ChannelConverter::new(source, source_channels, target_channels)
 }
 
 /// Creates iterator that converts the sample rate of `source` from
@@ -29,14 +31,14 @@ pub fn rate<S, I, R>(
     source: I,
     source_rate: R,
     target_rate: R,
-) -> impl Iterator<Item = S>
+) -> RateConverter<S, I>
 where
     S: Sample + std::ops::Add<Output = S>,
     I: Iterator<Item = S>,
     S::Float: Float + NumCast,
     R: ToPrimitive,
 {
-    rate::RateConverter::new(source, source_rate, target_rate)
+    RateConverter::new(source, source_rate, target_rate)
 }
 
 /// Creates iterator that interleaves the channels of `source`, than
@@ -51,7 +53,7 @@ pub fn do_interleave_channels_rate<S, I, R, II>(
     target_channels: u32,
     source_rate: R,
     target_rate: R,
-) -> impl Iterator<Item = S>
+) -> RateConverter<S, ChannelConverter<S, Interleave<I, S>>>
 where
     S: Sample + std::ops::Add<Output = S>,
     I: Iterator<Item = S>,
@@ -72,13 +74,19 @@ where
 /// interpolating the values
 ///
 /// This is equivalent to chaining functions `rate(channels())`
-pub fn do_channels_rate(
-    source: impl Iterator<Item = f32>,
+pub fn do_channels_rate<S, I, R>(
+    source: I,
     source_channels: u32,
     target_channels: u32,
-    source_rate: u32,
-    target_rate: u32,
-) -> impl Iterator<Item = f32> {
+    source_rate: R,
+    target_rate: R,
+) -> RateConverter<S, ChannelConverter<S, impl Iterator<Item = S>>>
+where
+    S: Sample + std::ops::Add<Output = S>,
+    I: Iterator<Item = S>,
+    S::Float: Float + NumCast,
+    R: ToPrimitive,
+{
     rate(
         channels(source, source_channels, target_channels),
         source_rate,
