@@ -1,28 +1,51 @@
-pub struct RateConverter<I: Iterator<Item = f32>> {
+use cpal::Sample;
+use num::{Float, NumCast, One, ToPrimitive, Zero};
+
+pub struct RateConverter<S, I>
+where
+    S: Sample + std::ops::Add<Output = S>,
+    I: Iterator<Item = S>,
+    S::Float: Float + NumCast,
+{
     source: I,
-    ratio: f32,
-    index: f32,
-    a: Option<f32>,
-    b: Option<f32>,
+    ratio: S::Float,
+    index: S::Float,
+    a: Option<S>,
+    b: Option<S>,
 }
 
-impl<I: Iterator<Item = f32>> RateConverter<I> {
-    pub fn new(source: I, source_rate: u32, target_rate: u32) -> Self {
+impl<S, I> RateConverter<S, I>
+where
+    S: Sample + std::ops::Add<Output = S>,
+    I: Iterator<Item = S>,
+    S::Float: Float + NumCast,
+{
+    pub fn new<R: ToPrimitive>(
+        source: I,
+        source_rate: R,
+        target_rate: R,
+    ) -> Self {
         RateConverter {
             source,
-            ratio: target_rate as f32 / source_rate as f32,
-            index: 0.,
+            ratio: <S::Float as NumCast>::from(target_rate).unwrap()
+                / <S::Float as NumCast>::from(source_rate).unwrap(),
+            index: S::Float::zero(),
             a: None,
             b: None,
         }
     }
 }
 
-impl<I: Iterator<Item = f32>> Iterator for RateConverter<I> {
-    type Item = f32;
+impl<S, I> Iterator for RateConverter<S, I>
+where
+    S: Sample + std::ops::Add<Output = S>,
+    I: Iterator<Item = S>,
+    S::Float: Float + NumCast,
+{
+    type Item = S;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.ratio == 1. {
+        if self.ratio.is_one() {
             return self.source.next();
         }
 
@@ -43,12 +66,14 @@ impl<I: Iterator<Item = f32>> Iterator for RateConverter<I> {
         let a = self.a.unwrap();
         let b = self.b.unwrap();
 
-        let res = a * (1. - self.index) + b * self.index;
+        let res = a.mul_amp(S::Float::one() - self.index)
+            + b.mul_amp(S::Float::from_sample(self.index));
 
-        self.index += self.ratio;
+        self.index = self.index + self.ratio;
 
-        while self.index >= 1. {
+        while self.index >= S::Float::one() {
             self.a = self.b;
+            self.index = self.index - S::Float::one();
             self.b = self.source.next();
         }
 

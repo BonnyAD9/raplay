@@ -7,7 +7,10 @@ pub mod source;
 mod tests {
     use std::{fs::File, io::stdin};
 
-    use crate::{sink::{Sink, ErrCallbackInfo}, source::symph::Symph};
+    use crate::{
+        sink::{ErrCallbackInfo, Sink},
+        source::symph::Symph,
+    };
     use eyre::Result;
 
     #[test]
@@ -17,7 +20,9 @@ mod tests {
             "/home/kubas/Music/4tet - 1st - 02 How Deep Is Your Love.mp3",
         )?)?;
         sink.on_callback(Some(|_| println!("callback")))?;
-        sink.on_err_callback(Some(|e: ErrCallbackInfo| println!("{}", e.err)))?;
+        sink.on_err_callback(Some(|e: ErrCallbackInfo| {
+            println!("{}", e.err)
+        }))?;
         sink.load(src, true)?;
         //thread::sleep(Duration::from_secs(5));
         loop {

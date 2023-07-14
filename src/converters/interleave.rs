@@ -18,6 +18,9 @@ impl<I: Iterator<Item = T>, T> Iterator for Interleave<I, T> {
     fn next(&mut self) -> Option<Self::Item> {
         let r = self.iterators[self.index].next();
         self.index += 1;
-        return r;
+        if self.index >= self.iterators.len() {
+            self.index = 0;
+        }
+        r
     }
 }

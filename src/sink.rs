@@ -159,10 +159,13 @@ impl Sink {
     /// # Panics
     /// - the current thread already locked one of the used mutexes and didn't
     ///   release them
-    pub fn on_callback(&self, callback: Option<impl FnMut(CallbackInfo) + Send + 'static>) -> Result<()> {
+    pub fn on_callback(
+        &self,
+        callback: Option<impl FnMut(CallbackInfo) + Send + 'static>,
+    ) -> Result<()> {
         (*self.shared.callback()?) = match callback {
             Some(c) => Some(Box::new(c)),
-            None => None
+            None => None,
         };
         Ok(())
     }
@@ -180,10 +183,13 @@ impl Sink {
     /// # Panics
     /// - the current thread already locked one of the used mutexes and didn't
     ///   release them
-    pub fn on_err_callback(&self, callback: Option<impl FnMut(ErrCallbackInfo) + Send + 'static>) -> Result<()> {
+    pub fn on_err_callback(
+        &self,
+        callback: Option<impl FnMut(ErrCallbackInfo) + Send + 'static>,
+    ) -> Result<()> {
         (*self.shared.err_callback()?) = match callback {
             Some(c) => Some(Box::new(c)),
-            None => None
+            None => None,
         };
         Ok(())
     }
@@ -269,9 +275,7 @@ impl Mixer {
     fn mix(&mut self, data: &mut SampleBufferMut) {
         if let Err(e) = self.try_mix(data) {
             self.silence(data);
-            _ = self
-                .shared
-                .invoke_err_callback(ErrCallbackInfo::sink(e));
+            _ = self.shared.invoke_err_callback(ErrCallbackInfo::sink(e));
         }
     }
 
@@ -376,21 +380,21 @@ impl ErrCallbackInfo {
     pub fn playback(err: Report) -> Self {
         ErrCallbackInfo {
             source: ErrSource::Playback,
-            err
+            err,
         }
     }
 
     pub fn source(err: Report) -> Self {
         ErrCallbackInfo {
             source: ErrSource::Source,
-            err
+            err,
         }
     }
 
     pub fn sink(err: Report) -> Self {
         ErrCallbackInfo {
             source: ErrSource::Sink,
-            err
+            err,
         }
     }
 }

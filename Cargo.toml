@@ -8,4 +8,5 @@ edition = "2021"
 [dependencies]
 cpal = "0.15.2"
 eyre = "0.6.8"
+num = "0.4.1"
 symphonia = { version = "0.5.3", features = ["all"] }

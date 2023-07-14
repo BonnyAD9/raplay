@@ -1,18 +1,19 @@
+use cpal::{I24, U24};
 use eyre::{Report, Result};
 use symphonia::{
     core::{
-        audio::SampleBuffer,
+        audio::AudioBufferRef,
         codecs::Decoder,
-        io::{
-            MediaSource, MediaSourceStream, MediaSourceStreamOptions
-        },
+        io::{MediaSource, MediaSourceStream, MediaSourceStreamOptions},
         probe::ProbeResult,
+        sample::Sample,
     },
     default::{get_codecs, get_probe},
 };
 
 use crate::{
-    converters::do_channels_rate, operate_samples,
+    converters::{do_interleave_channels_rate, UniSample},
+    operate_samples,
     sample_buffer::SampleBufferMut,
 };
 
@@ -27,7 +28,6 @@ pub struct Symph {
     probed: ProbeResult,
     decoder: Box<dyn Decoder>,
     track_id: u32,
-    buffer: Option<SampleBuffer<f32>>, // TODO: generic type to avoid copying of data
     buffer_start: Option<usize>,
 }
 
@@ -69,7 +69,6 @@ impl Symph {
             probed: pres,
             decoder,
             track_id,
-            buffer: None,
             buffer_start: None,
         })
     }
@@ -88,7 +87,7 @@ impl Source for Symph {
 }
 
 impl Symph {
-    fn decode<T: cpal::Sample + cpal::FromSample<f32>>(
+    fn decode<T: UniSample>(
         &mut self,
         mut buffer: &mut [T],
     ) -> (usize, Result<()>) {
@@ -116,24 +115,13 @@ impl Symph {
                 }
             };
 
-            let data = match self.decoder.decode(&packet) {
-                Ok(d) => d,
+            match self.decoder.decode(&packet) {
+                Ok(d) => {
+                    self.source_sample_rate = d.spec().rate;
+                    self.source_channels = d.spec().channels.count() as u32;
+                }
                 Err(e) => return (readed, Err(Report::new(e))),
             };
-
-            self.source_sample_rate = data.spec().rate;
-            self.source_channels = data.spec().channels.count() as u32;
-
-            // create new buffer if there is no buffer
-            if self.buffer.is_none() {
-                self.buffer = Some(SampleBuffer::new(
-                    data.capacity() as u64,
-                    *data.spec(),
-                ));
-            }
-
-            // TODO: compensate possible missing samples
-            self.buffer.as_mut().unwrap().copy_interleaved_ref(data);
 
             // self.buffer is always Some
             let i = self.read_buffer(&mut buffer, 0);
@@ -145,34 +133,60 @@ impl Symph {
     }
 
     /// self.buffer must be some
-    fn read_buffer<T: cpal::Sample + cpal::FromSample<f32>>(
+    fn read_buffer<T: UniSample>(
         &mut self,
         buffer: &mut &mut [T],
         start: usize,
     ) -> usize {
-        let samples = self.buffer.as_ref().unwrap();
+        let samples = self.decoder.last_decoded();
         let mut i = 0;
 
-        for s in do_channels_rate(
-            samples.samples()[start..].iter().map(|i| *i),
-            self.source_channels,
-            self.target_channels,
-            self.source_sample_rate,
-            self.target_sample_rate,
-        ) {
-            buffer[i] = T::from_sample(s);
-            i += 1;
-            if i == buffer.len() {
-                break;
-            }
+        macro_rules! arm {
+            ($map:expr, $src:ident) => {{
+                let mut len = 0;
+                for s in do_interleave_channels_rate(
+                    $src.planes().planes().iter().map(|i| {
+                        let slice =
+                            &i[start / self.source_channels as usize..];
+                        len += slice.len();
+                        slice.iter().map($map)
+                    }),
+                    self.source_channels,
+                    self.target_channels,
+                    self.source_sample_rate,
+                    self.target_sample_rate,
+                ) {
+                    buffer[i] = T::from_sample(s);
+                    i += 1;
+                    if i == buffer.len() {
+                        break;
+                    }
+                }
+
+                self.buffer_start = if i + start == len {
+                    None
+                } else {
+                    Some(i + start)
+                }
+            }};
         }
 
-        self.buffer_start = if i + start == self.buffer.as_ref().unwrap().len()
-        {
-            None
-        } else {
-            Some(i + start)
-        };
+        match samples {
+            AudioBufferRef::U8(src) => arm!(|s| *s, src),
+            AudioBufferRef::U16(src) => arm!(|s| *s, src),
+            AudioBufferRef::U24(src) => {
+                arm!(|s| U24::new(s.clamped().0 as i32).unwrap(), src)
+            }
+            AudioBufferRef::U32(src) => arm!(|s| *s, src),
+            AudioBufferRef::S8(src) => arm!(|s| *s, src),
+            AudioBufferRef::S16(src) => arm!(|s| *s, src),
+            AudioBufferRef::S24(src) => {
+                arm!(|s| I24::new(s.clamped().0).unwrap(), src)
+            }
+            AudioBufferRef::S32(src) => arm!(|s| *s, src),
+            AudioBufferRef::F32(src) => arm!(|s| *s, src),
+            AudioBufferRef::F64(src) => arm!(|s| *s, src),
+        }
 
         i
     }

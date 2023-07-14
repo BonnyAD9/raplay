@@ -20,7 +20,6 @@
                     "kind": "lib"
                 }
             },
-            "args": [],
             "cwd": "${workspaceFolder}"
         }
     ]

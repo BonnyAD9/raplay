@@ -1,12 +1,14 @@
+use cpal::Sample;
+
 // TODO: smarter conversion
-pub struct ChannelConverter<I: Iterator<Item = f32>> {
+pub struct ChannelConverter<S: Sample, I: Iterator<Item = S>> {
     source: I,
     source_channels: u32,
     target_channels: u32,
     index: usize,
 }
 
-impl<I: Iterator<Item = f32>> ChannelConverter<I> {
+impl<S: Sample, I: Iterator<Item = S>> ChannelConverter<S, I> {
     pub fn new(source: I, source_channels: u32, target_channels: u32) -> Self {
         ChannelConverter {
             source,
@@ -17,14 +19,14 @@ impl<I: Iterator<Item = f32>> ChannelConverter<I> {
     }
 }
 
-impl<I: Iterator<Item = f32>> Iterator for ChannelConverter<I> {
-    type Item = f32;
+impl<S: Sample, I: Iterator<Item = S>> Iterator for ChannelConverter<S, I> {
+    type Item = S;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.source_channels.cmp(&self.target_channels) {
             std::cmp::Ordering::Less => {
                 let res = if self.index >= self.source_channels as usize {
-                    Some(0.)
+                    Some(S::EQUILIBRIUM)
                 } else {
                     self.source.next()
                 };
