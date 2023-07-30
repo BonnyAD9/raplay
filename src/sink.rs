@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
-    SampleFormat, SampleRate, Stream, SupportedOutputConfigs,
+    Sample, SampleFormat, SampleRate, Stream, SupportedOutputConfigs,
     SupportedStreamConfig,
 };
 use eyre::{Report, Result};
@@ -56,6 +56,7 @@ pub struct ErrCallbackInfo {
 #[derive(Clone)]
 struct Controls {
     play: bool,
+    volume: f32,
 }
 
 struct Mixer {
@@ -86,16 +87,9 @@ impl Sink {
 
         let config = config.into();
 
-        let shared = Arc::new(SharedData {
-            controls: Mutex::new(Controls { play: false }),
-            source: Mutex::new(None),
-            callback: Mutex::new(None),
-            err_callback: Mutex::new(None),
-        });
+        let shared = Arc::new(SharedData::new());
 
-        let mut mixer = Mixer {
-            shared: shared.clone(),
-        };
+        let mut mixer = Mixer::new(shared.clone());
 
         let shared_clone = shared.clone();
 
@@ -329,6 +323,36 @@ impl Sink {
         self.play(true)
     }
 
+    /// Sets the volume of the playback, 0 = mute, 1 = full volume.
+    ///
+    /// The value is not clipped so the caller should make sure that the volume
+    /// is in the bounds or the audio may have clipping.
+    ///
+    /// # Errors
+    /// - another user of one of the used mutexes panicked while using it
+    ///
+    /// # Panics
+    /// - the current thread already locked one of the used mutexes and didn't
+    ///   release them
+    pub fn volume(&self, volume: f32) -> Result<()> {
+        self.shared.controls()?.volume = volume;
+        Ok(())
+    }
+
+    /// Gets the volume of the playback, 0 = mute, 1 = full volume.
+    ///
+    /// The value may not be in the range.
+    ///
+    /// # Errors
+    /// - another user of one of the used mutexes panicked while using it
+    ///
+    /// # Panics
+    /// - the current thread already locked one of the used mutexes and didn't
+    ///   release them
+    pub fn get_volume(&self) -> Result<f32> {
+        Ok(self.shared.controls()?.volume)
+    }
+
     /// Returns true if the source is playing, otherwise returns false
     ///
     /// # Errors
@@ -343,6 +367,10 @@ impl Sink {
 }
 
 impl Mixer {
+    fn new(shared: Arc<SharedData>) -> Self {
+        Self { shared }
+    }
+
     fn mix(&mut self, data: &mut SampleBufferMut) {
         if let Err(e) = self.try_mix(data) {
             self.silence(data);
@@ -354,7 +382,7 @@ impl Mixer {
         let controls = { self.shared.controls()?.clone() };
 
         if controls.play {
-            self.play_source(data)?;
+            self.play_source(data, controls)?;
         } else {
             self.silence(data)
         }
@@ -362,7 +390,11 @@ impl Mixer {
         Ok(())
     }
 
-    fn play_source(&mut self, data: &mut SampleBufferMut) -> Result<()> {
+    fn play_source(
+        &mut self,
+        data: &mut SampleBufferMut,
+        controls: Controls,
+    ) -> Result<()> {
         let mut src = self.shared.source()?;
 
         match src.as_mut() {
@@ -376,6 +408,14 @@ impl Mixer {
                 }
 
                 operate_samples!(data, d, {
+                    if controls.volume != 1. {
+                        for s in d.iter_mut() {
+                            *s = (*s).mul_amp(controls.volume.into());
+                        }
+                    } else if controls.volume == 0. {
+                        Self::write_silence(&mut d[..cnt]);
+                    }
+
                     Self::write_silence(&mut d[cnt..]);
                     if cnt < d.len() {
                         *src = None;
@@ -402,6 +442,15 @@ impl Mixer {
 }
 
 impl SharedData {
+    fn new() -> Self {
+        Self {
+            controls: Mutex::new(Controls::new()),
+            source: Mutex::new(None),
+            callback: Mutex::new(None),
+            err_callback: Mutex::new(None),
+        }
+    }
+
     fn controls(&self) -> Result<MutexGuard<'_, Controls>> {
         self.controls
             .lock()
@@ -447,6 +496,12 @@ impl SharedData {
     }
 }
 
+impl Default for SharedData {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ErrCallbackInfo {
     pub fn playback(err: Report) -> Self {
         ErrCallbackInfo {
@@ -467,6 +522,21 @@ impl ErrCallbackInfo {
             source: ErrSource::Sink,
             err,
         }
+    }
+}
+
+impl Controls {
+    pub fn new() -> Self {
+        Self {
+            play: false,
+            volume: 1.,
+        }
+    }
+}
+
+impl Default for Controls {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

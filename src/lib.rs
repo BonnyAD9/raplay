@@ -23,6 +23,7 @@ mod tests {
         sink.on_err_callback(Some(|e: ErrCallbackInfo| {
             println!("{}", e.err)
         }))?;
+        sink.volume(0.2)?;
         sink.load(src, true)?;
         //thread::sleep(Duration::from_secs(5));
         loop {
