@@ -7,6 +7,7 @@ The library is very new and not much tested.
 - Play(Resume)/Pause
 - Callback when audio ends
 - Callback for errors
+- Volume
 
 ## Supported formats
 All the decoding is done by
