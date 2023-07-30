@@ -35,8 +35,17 @@ let src = Symph::try_new(file)?; // create a symphonia decoder source
 sink.load(src, true)?; // play the mp3 file
 ```
 
-## Know issues
+## Known issues
 - The sound is not clear when playing high sample rates relative to what
 is set by the device (192000Hz/41000Hz)
     - this has now been fixed with a workaround and should not be problem
       on most devices
+
+## How to get it
+It is available on [crates.io](https://crates.io/crates/raplay)
+
+## Links
+- **Author:** [BonnyAD9](https://github.com/BonnyAD9)
+- **GitHub repository:** [BonnyAD/raplay](https://github.com/BonnyAD9/raplay)
+- **Package:** [crates.io](https://crates.io/crates/raplay)
+- **My Website:** [bonnyad9.github.io](https://bonnyad9.github.io/)
