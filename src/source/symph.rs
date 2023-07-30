@@ -222,7 +222,7 @@ impl Symph {
                 self.buffer_start = if last_index == len {
                     None
                 } else {
-                    Some(last_index)
+                    Some(last_index + start)
                 }
             }};
         }
