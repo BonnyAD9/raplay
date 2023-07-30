@@ -32,4 +32,54 @@ pub trait Source: Send {
     fn preffered_config(&self) -> Option<DeviceConfig> {
         None
     }
+
+    /// Sets the volume iterator
+    ///
+    /// The volume iterator is used to modify the volume of the source
+    ///
+    /// # Returns
+    /// false if the volume iterator is not supported by the source,
+    /// otherwise true
+    fn volume(&mut self, volume: VolumeIterator) -> bool {
+        // just to ignore the warning but don't have to change the name
+        _ = volume;
+        false
+    }
+}
+
+/// Iterates over volume of sequence of samples
+/// A sample should be multiplied by the value returned by the iterator
+///
+/// Calling [`Iterator::next`] never returns [`None`], if you don't
+/// want to get the [`Option`] you can use [`VolumeIterator::next_vol`]
+#[derive(Clone, Copy, Debug)]
+pub struct VolumeIterator {
+    volume: f32,
+}
+
+impl VolumeIterator {
+    /// Creates volume iterator with constant volume
+    pub fn constant(volume: f32) -> Self {
+        Self { volume }
+    }
+
+    /// This is the same as next on the iterator
+    ///
+    /// # Returns
+    /// Volume for the next sample
+    pub fn next_vol(&self) -> f32 {
+        self.volume
+    }
+}
+
+impl Iterator for VolumeIterator {
+    type Item = f32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        Some(self.next_vol())
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (usize::MAX, None)
+    }
 }

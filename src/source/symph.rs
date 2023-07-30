@@ -17,7 +17,7 @@ use crate::{
     sample_buffer::SampleBufferMut,
 };
 
-use super::{DeviceConfig, Source};
+use super::{DeviceConfig, Source, VolumeIterator};
 
 /// Source that decodes audio using symphonia decoder
 pub struct Symph {
@@ -29,6 +29,7 @@ pub struct Symph {
     decoder: Box<dyn Decoder>,
     track_id: u32,
     buffer_start: Option<usize>,
+    volume: VolumeIterator,
 }
 
 impl Symph {
@@ -70,6 +71,7 @@ impl Symph {
             decoder,
             track_id,
             buffer_start: None,
+            volume: VolumeIterator::constant(1.),
         })
     }
 }
@@ -105,13 +107,21 @@ impl Source for Symph {
             },
         })
     }
+
+    fn volume(&mut self, volume: VolumeIterator) -> bool {
+        self.volume = volume;
+        true
+    }
 }
 
 impl Symph {
     fn decode<T: UniSample>(
         &mut self,
         mut buffer: &mut [T],
-    ) -> (usize, Result<()>) {
+    ) -> (usize, Result<()>)
+    where
+        T::Float: From<f32>,
+    {
         // TODO: no temp buffer
         let mut readed = 0;
 
@@ -158,7 +168,10 @@ impl Symph {
         &mut self,
         buffer: &mut &mut [T],
         start: usize,
-    ) -> usize {
+    ) -> usize
+    where
+        T::Float: From<f32>,
+    {
         let samples = self.decoder.last_decoded();
         let mut i = 0;
 
@@ -182,7 +195,8 @@ impl Symph {
                     self.source_sample_rate,
                     self.target_sample_rate,
                 ) {
-                    buffer[i] = T::from_sample(s);
+                    buffer[i] = T::from_sample(s)
+                        .mul_amp(self.volume.next_vol().into());
                     i += 1;
                     if i == buffer.len() {
                         break;

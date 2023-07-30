@@ -10,7 +10,7 @@ use eyre::{Report, Result};
 use crate::{
     operate_samples,
     sample_buffer::SampleBufferMut,
-    source::{DeviceConfig, Source},
+    source::{DeviceConfig, Source, VolumeIterator},
 };
 
 /// A player that can play `Source`
@@ -399,6 +399,9 @@ impl Mixer {
 
         match src.as_mut() {
             Some(s) => {
+                let supports_volume =
+                    s.volume(VolumeIterator::constant(controls.volume));
+
                 let (cnt, e) = s.read(data);
 
                 if let Err(e) = e {
@@ -408,12 +411,16 @@ impl Mixer {
                 }
 
                 operate_samples!(data, d, {
-                    if controls.volume != 1. {
-                        for s in d.iter_mut() {
-                            *s = (*s).mul_amp(controls.volume.into());
+                    // manually change the volume of each sample if the
+                    // source doesn't support volume
+                    if !supports_volume {
+                        if controls.volume != 1. {
+                            for s in d.iter_mut() {
+                                *s = (*s).mul_amp(controls.volume.into());
+                            }
+                        } else if controls.volume == 0. {
+                            Self::write_silence(&mut d[..cnt]);
                         }
-                    } else if controls.volume == 0. {
-                        Self::write_silence(&mut d[..cnt]);
                     }
 
                     Self::write_silence(&mut d[cnt..]);
