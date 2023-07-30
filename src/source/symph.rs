@@ -87,9 +87,17 @@ impl Source for Symph {
         operate_samples!(buffer, b, self.decode(*b))
     }
 
-    fn preffered_config(&self) -> Option<DeviceConfig> {
-        let dec = self.decoder.last_decoded();
-        let spec = dec.spec();
+    fn preffered_config(&mut self) -> Option<DeviceConfig> {
+        let mut dec = self.decoder.last_decoded();
+        let mut spec = dec.spec();
+
+        if spec.rate == 0 && dec.frames() == 0 {
+            self.decode_packet().ok()?;
+            self.buffer_start = Some(0);
+            dec = self.decoder.last_decoded();
+            spec = dec.spec();
+        }
+
         Some(DeviceConfig {
             channel_count: spec.channels.count() as u32,
             sample_rate: spec.rate,
@@ -133,26 +141,10 @@ impl Symph {
         }
 
         while buffer.len() > 0 {
-            let packet = loop {
-                match self.probed.format.next_packet() {
-                    Ok(p) => {
-                        if p.track_id() != self.track_id {
-                            continue;
-                        }
-                        break p;
-                    }
-                    // TODO: check for ResetRequired
-                    Err(e) => return (0, Err(Report::new(e))),
-                }
-            };
-
-            match self.decoder.decode(&packet) {
-                Ok(d) => {
-                    self.source_sample_rate = d.spec().rate;
-                    self.source_channels = d.spec().channels.count() as u32;
-                }
-                Err(e) => return (readed, Err(Report::new(e))),
-            };
+            match self.decode_packet() {
+                Ok(_) => {},
+                Err(e) => return (readed, Err(e))
+            }
 
             // self.buffer is always Some
             let i = self.read_buffer(&mut buffer, 0);
@@ -161,6 +153,30 @@ impl Symph {
         }
 
         (readed, Ok(()))
+    }
+
+    fn decode_packet(&mut self) -> Result<()> {
+        let packet = loop {
+            match self.probed.format.next_packet() {
+                Ok(p) => {
+                    if p.track_id() != self.track_id {
+                        continue;
+                    }
+                    break p;
+                }
+                // TODO: check for ResetRequired
+                Err(e) => return Err(Report::new(e)),
+            }
+        };
+
+        match self.decoder.decode(&packet) {
+            Ok(d) => {
+                self.source_sample_rate = d.spec().rate;
+                self.source_channels = d.spec().channels.count() as u32;
+                Ok(())
+            }
+            Err(e) => Err(Report::new(e)),
+        }
     }
 
     /// self.buffer must be some
