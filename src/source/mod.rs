@@ -5,6 +5,10 @@ use crate::sample_buffer::SampleBufferMut;
 
 pub mod sine;
 pub mod symph;
+
+pub use sine::SineSource;
+pub use symph::Symph;
+
 // TODO: better selecting algorithm (if not sample rate at least channel count)
 // TODO: fallback sample format when unsupported sample rate
 // TODO: go back to reasonable settings when no prefered config

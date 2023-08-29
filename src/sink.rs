@@ -16,8 +16,9 @@ use crate::{
 /// A player that can play `Source`
 pub struct Sink {
     shared: Arc<SharedData>,
+    // The stream is never read, it just stays alive so that the audio plays
     #[allow(dead_code)]
-    stream: Stream,
+    stream: Option<Stream>,
     info: DeviceConfig,
 }
 
@@ -46,79 +47,6 @@ struct Mixer {
 }
 
 impl Sink {
-    /// Creates the player from the default audio output device with the
-    /// default configuration
-    ///
-    /// # Errors
-    /// - no default device found
-    /// - device became unavailable
-    /// - device uses unsupported sample format
-    pub fn default_out() -> Result<Sink> {
-        // TODO: select device when the default device was not found
-        let device = cpal::default_host()
-            .default_output_device()
-            .ok_or(Error::NoOutDevice)?;
-        let config = device.default_output_config()?;
-        let sample_format = config.sample_format();
-
-        let info = DeviceConfig {
-            channel_count: config.channels() as u32,
-            sample_rate: config.sample_rate().0,
-            sample_format: config.sample_format(),
-        };
-
-        let config = config.into();
-
-        let shared = Arc::new(SharedData::new());
-
-        let mut mixer = Mixer::new(shared.clone());
-
-        let shared_clone = shared.clone();
-
-        macro_rules! arm {
-            ($t:ident, $e:ident) => {
-                device.build_output_stream(
-                    &config,
-                    move |d: &mut [$t], _| {
-                        mixer.mix(&mut SampleBufferMut::$e(d))
-                    },
-                    move |e| {
-                        _ = shared_clone.invoke_err_callback(e.into());
-                    },
-                    //Some(Duration::from_millis(5)),
-                    None,
-                )
-            };
-        }
-
-        let stream = match sample_format {
-            SampleFormat::I8 => arm!(i8, I8),
-            SampleFormat::I16 => arm!(i16, I16),
-            SampleFormat::I32 => arm!(i32, I32),
-            SampleFormat::I64 => arm!(i64, I64),
-            SampleFormat::U8 => arm!(u8, U8),
-            SampleFormat::U16 => arm!(u16, U16),
-            SampleFormat::U32 => arm!(u32, U32),
-            SampleFormat::U64 => arm!(u64, U64),
-            SampleFormat::F32 => arm!(f32, F32),
-            SampleFormat::F64 => arm!(f64, F64),
-            _ => {
-                // TODO: select other format when this is not supported
-                return Err(Error::UnsupportedSampleFormat);
-            }
-        }?;
-
-        stream.play()?;
-
-        let sink = Sink {
-            shared,
-            stream,
-            info,
-        };
-
-        Ok(sink)
-    }
-
     fn build_out_stream(
         &mut self,
         config: Option<DeviceConfig>,
@@ -139,9 +67,7 @@ impl Sink {
         };
 
         let shared = self.shared.clone();
-        let mut mixer = Mixer {
-            shared: shared.clone(),
-        };
+        let mut mixer = Mixer::new(shared.clone());
 
         let config = config.into();
         macro_rules! arm {
@@ -160,7 +86,7 @@ impl Sink {
             };
         }
 
-        self.stream = match self.info.sample_format {
+        let stream = match self.info.sample_format {
             SampleFormat::I8 => arm!(i8, I8),
             SampleFormat::I16 => arm!(i16, I16),
             SampleFormat::I32 => arm!(i32, I32),
@@ -176,6 +102,10 @@ impl Sink {
                 return Err(Error::UnsupportedSampleFormat);
             }
         }?;
+
+        stream.play()?;
+
+        self.stream = Some(stream);
 
         Ok(())
     }
@@ -337,6 +267,20 @@ impl Sink {
     ///   release them
     pub fn is_playing(&self) -> Result<bool> {
         Ok(self.shared.controls()?.play)
+    }
+}
+
+impl Default for Sink {
+    fn default() -> Self {
+        Self {
+            shared: Arc::new(SharedData::new()),
+            stream: None,
+            info: DeviceConfig {
+                channel_count: 0,
+                sample_rate: 0,
+                sample_format: SampleFormat::F32,
+            },
+        }
     }
 }
 

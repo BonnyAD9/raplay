@@ -4,17 +4,20 @@ pub mod sample_buffer;
 pub mod sink;
 pub mod source;
 
+pub use err::Error;
+pub use sink::Sink;
+
 #[cfg(test)]
 mod tests {
     use std::{fs::File, io::stdin};
 
-    use crate::{err::Error, sink::Sink, source::symph::Symph};
+    use crate::{err::Error, Sink, source::Symph};
 
     use anyhow::Result;
 
     #[test]
     fn play_audio() -> Result<()> {
-        let mut sink = Sink::default_out()?;
+        let mut sink = Sink::default();
         let src = Symph::try_new(File::open(
             "/home/kubas/Music/AJR - Neotheater - 01 Next Up Forever.flac",
         )?)?;
