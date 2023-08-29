@@ -1,4 +1,5 @@
 pub mod converters;
+pub mod err;
 pub mod sample_buffer;
 pub mod sink;
 pub mod source;
@@ -7,11 +8,9 @@ pub mod source;
 mod tests {
     use std::{fs::File, io::stdin};
 
-    use crate::{
-        sink::{ErrCallbackInfo, Sink},
-        source::symph::Symph,
-    };
-    use eyre::Result;
+    use crate::{err::Error, sink::Sink, source::symph::Symph};
+
+    use anyhow::Result;
 
     #[test]
     fn play_audio() -> Result<()> {
@@ -20,9 +19,7 @@ mod tests {
             "/home/kubas/Music/AJR - Neotheater - 01 Next Up Forever.flac",
         )?)?;
         sink.on_callback(Some(|_| println!("callback")))?;
-        sink.on_err_callback(Some(|e: ErrCallbackInfo| {
-            println!("{}", e.err)
-        }))?;
+        sink.on_err_callback(Some(|e: Error| println!("{}", e)))?;
         sink.volume(0.2)?;
         sink.load(src, true)?;
         //thread::sleep(Duration::from_secs(5));

@@ -1,8 +1,7 @@
+use anyhow::Result;
 use cpal::SampleFormat;
 
 use crate::sample_buffer::SampleBufferMut;
-
-use eyre::Result;
 
 pub mod sine;
 pub mod symph;

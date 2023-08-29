@@ -1,12 +1,11 @@
 use std::f32::consts::PI;
 
+use anyhow::Result;
 use cpal::FromSample;
 
 use crate::{operate_samples, sample_buffer::SampleBufferMut};
 
 use super::{Source, VolumeIterator};
-
-use eyre::Result;
 
 /// Source of sine waves
 pub struct SineSource {

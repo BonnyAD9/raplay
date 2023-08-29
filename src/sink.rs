@@ -5,9 +5,9 @@ use cpal::{
     Sample, SampleFormat, SampleRate, Stream, SupportedOutputConfigs,
     SupportedStreamConfig,
 };
-use eyre::{Report, Result};
 
 use crate::{
+    err::{Error, Result},
     operate_samples,
     sample_buffer::SampleBufferMut,
     source::{DeviceConfig, Source, VolumeIterator},
@@ -25,7 +25,7 @@ struct SharedData {
     controls: Mutex<Controls>,
     source: Mutex<Option<Box<dyn Source>>>,
     callback: Mutex<Option<Box<dyn FnMut(CallbackInfo) + Send>>>,
-    err_callback: Mutex<Option<Box<dyn FnMut(ErrCallbackInfo) + Send>>>,
+    err_callback: Mutex<Option<Box<dyn FnMut(Error) + Send>>>,
 }
 
 /// Callback type and asociated information
@@ -33,24 +33,6 @@ struct SharedData {
 pub enum CallbackInfo {
     /// Invoked when the current source has reached end
     SourceEnded,
-}
-
-#[non_exhaustive]
-pub enum ErrSource {
-    /// Errors from `cpal`
-    Playback,
-    /// Errors from the current source
-    Source,
-    /// Errors from the sink
-    Sink,
-}
-
-/// Error source and the original error as `eyre::Report`
-pub struct ErrCallbackInfo {
-    /// The part which failed
-    pub source: ErrSource,
-    /// The original error as Report
-    pub err: Report,
 }
 
 #[derive(Clone)]
@@ -75,7 +57,7 @@ impl Sink {
         // TODO: select device when the default device was not found
         let device = cpal::default_host()
             .default_output_device()
-            .ok_or(Report::msg("No available output device"))?;
+            .ok_or(Error::NoOutDevice)?;
         let config = device.default_output_config()?;
         let sample_format = config.sample_format();
 
@@ -101,9 +83,7 @@ impl Sink {
                         mixer.mix(&mut SampleBufferMut::$e(d))
                     },
                     move |e| {
-                        _ = shared_clone.invoke_err_callback(
-                            ErrCallbackInfo::playback(Report::new(e)),
-                        );
+                        _ = shared_clone.invoke_err_callback(e.into());
                     },
                     //Some(Duration::from_millis(5)),
                     None,
@@ -124,9 +104,7 @@ impl Sink {
             SampleFormat::F64 => arm!(f64, F64),
             _ => {
                 // TODO: select other format when this is not supported
-                return Err(Report::msg(
-                    "Unsupported sample format '{sample_format}'",
-                ));
+                return Err(Error::UnsupportedSampleFormat);
             }
         }?;
 
@@ -147,7 +125,7 @@ impl Sink {
     ) -> Result<()> {
         let device = cpal::default_host()
             .default_input_device()
-            .ok_or(Report::msg("No available output device"))?;
+            .ok_or(Error::NoOutDevice)?;
         let config = match config {
             Some(c) => select_config(c, device.supported_output_configs()?)
                 .unwrap_or(device.default_output_config()?),
@@ -174,9 +152,7 @@ impl Sink {
                         mixer.mix(&mut SampleBufferMut::$e(d))
                     },
                     move |e| {
-                        _ = shared.invoke_err_callback(
-                            ErrCallbackInfo::playback(Report::new(e)),
-                        );
+                        _ = shared.invoke_err_callback(e.into());
                     },
                     //Some(Duration::from_millis(5)),
                     None,
@@ -197,9 +173,7 @@ impl Sink {
             SampleFormat::F64 => arm!(f64, F64),
             _ => {
                 // TODO: select other format when this is not supported
-                return Err(Report::msg(
-                    "Unsupported sample format '{sample_format}'",
-                ));
+                return Err(Error::UnsupportedSampleFormat);
             }
         }?;
 
@@ -245,7 +219,7 @@ impl Sink {
     ///   release them
     pub fn on_err_callback(
         &self,
-        callback: Option<impl FnMut(ErrCallbackInfo) + Send + 'static>,
+        callback: Option<impl FnMut(Error) + Send + 'static>,
     ) -> Result<()> {
         (*self.shared.err_callback()?) = match callback {
             Some(c) => Some(Box::new(c)),
@@ -374,7 +348,7 @@ impl Mixer {
     fn mix(&mut self, data: &mut SampleBufferMut) {
         if let Err(e) = self.try_mix(data) {
             self.silence(data);
-            _ = self.shared.invoke_err_callback(ErrCallbackInfo::sink(e));
+            _ = self.shared.invoke_err_callback(e);
         }
     }
 
@@ -405,9 +379,7 @@ impl Mixer {
                 let (cnt, e) = s.read(data);
 
                 if let Err(e) = e {
-                    _ = self
-                        .shared
-                        .invoke_err_callback(ErrCallbackInfo::source(e));
+                    _ = self.shared.invoke_err_callback(e.into());
                 }
 
                 operate_samples!(data, d, {
@@ -459,33 +431,24 @@ impl SharedData {
     }
 
     fn controls(&self) -> Result<MutexGuard<'_, Controls>> {
-        self.controls
-            .lock()
-            .or_else(|e| Err(Report::msg(e.to_string())))
+        Ok(self.controls.lock()?)
     }
 
     fn source(&self) -> Result<MutexGuard<'_, Option<Box<dyn Source>>>> {
-        self.source
-            .lock()
-            .or_else(|e| Err(Report::msg(e.to_string())))
+        Ok(self.source.lock()?)
     }
 
     fn callback(
         &self,
     ) -> Result<MutexGuard<'_, Option<Box<dyn FnMut(CallbackInfo) + Send>>>>
     {
-        self.callback
-            .lock()
-            .or_else(|e| Err(Report::msg(e.to_string())))
+        Ok(self.callback.lock()?)
     }
 
     fn err_callback(
         &self,
-    ) -> Result<MutexGuard<'_, Option<Box<dyn FnMut(ErrCallbackInfo) + Send>>>>
-    {
-        self.err_callback
-            .lock()
-            .or_else(|e| Err(Report::msg(e.to_string())))
+    ) -> Result<MutexGuard<'_, Option<Box<dyn FnMut(Error) + Send>>>> {
+        Ok(self.err_callback.lock()?)
     }
 
     fn invoke_callback(&self, args: CallbackInfo) -> Result<()> {
@@ -495,7 +458,7 @@ impl SharedData {
         Ok(())
     }
 
-    fn invoke_err_callback(&self, args: ErrCallbackInfo) -> Result<()> {
+    fn invoke_err_callback(&self, args: Error) -> Result<()> {
         if let Some(cb) = self.err_callback()?.as_mut() {
             cb(args)
         }
@@ -506,29 +469,6 @@ impl SharedData {
 impl Default for SharedData {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl ErrCallbackInfo {
-    pub fn playback(err: Report) -> Self {
-        ErrCallbackInfo {
-            source: ErrSource::Playback,
-            err,
-        }
-    }
-
-    pub fn source(err: Report) -> Self {
-        ErrCallbackInfo {
-            source: ErrSource::Source,
-            err,
-        }
-    }
-
-    pub fn sink(err: Report) -> Self {
-        ErrCallbackInfo {
-            source: ErrSource::Sink,
-            err,
-        }
     }
 }
 

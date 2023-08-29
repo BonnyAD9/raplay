@@ -1,5 +1,4 @@
 use cpal::{SampleFormat, I24, U24};
-use eyre::{Report, Result};
 use symphonia::{
     core::{
         audio::AudioBufferRef,
@@ -10,10 +9,11 @@ use symphonia::{
     },
     default::{get_codecs, get_probe},
 };
+use thiserror::Error;
 
 use crate::{
     converters::{do_channels_rate, interleave, UniSample},
-    operate_samples,
+    err, operate_samples,
     sample_buffer::SampleBufferMut,
 };
 
@@ -39,7 +39,9 @@ impl Symph {
     /// - the format of the source cannot be determined
     /// - no default track is found
     /// - no decoder was found for the codec, insufficient codec parameters
-    pub fn try_new<T: MediaSource + 'static>(source: T) -> Result<Symph> {
+    pub fn try_new<T: MediaSource + 'static>(
+        source: T,
+    ) -> Result<Symph, Error> {
         let stream = MediaSourceStream::new(
             Box::new(source),
             MediaSourceStreamOptions::default(),
@@ -53,10 +55,8 @@ impl Symph {
         )?;
 
         // TODO: select other track if the default is unavailable
-        let track = pres
-            .format
-            .default_track()
-            .ok_or(Report::msg("Cannot get default track"))?;
+        let track =
+            pres.format.default_track().ok_or(Error::CantSelectTrack)?;
         let track_id = track.id;
 
         let decoder =
@@ -77,14 +77,20 @@ impl Symph {
 }
 
 impl Source for Symph {
-    fn init(&mut self, info: &DeviceConfig) -> Result<()> {
+    fn init(&mut self, info: &DeviceConfig) -> anyhow::Result<()> {
         self.target_sample_rate = info.sample_rate;
         self.target_channels = info.channel_count;
         Ok(())
     }
 
-    fn read(&mut self, buffer: &mut SampleBufferMut) -> (usize, Result<()>) {
-        operate_samples!(buffer, b, self.decode(*b))
+    fn read(
+        &mut self,
+        buffer: &mut SampleBufferMut,
+    ) -> (usize, anyhow::Result<()>) {
+        operate_samples!(buffer, b, {
+            let (l, e) = self.decode(*b);
+            (l, e.map_err(|e| err::Error::Symph(e).into()))
+        })
     }
 
     fn preffered_config(&mut self) -> Option<DeviceConfig> {
@@ -126,7 +132,7 @@ impl Symph {
     fn decode<T: UniSample>(
         &mut self,
         mut buffer: &mut [T],
-    ) -> (usize, Result<()>)
+    ) -> (usize, Result<(), Error>)
     where
         T::Float: From<f32>,
     {
@@ -142,8 +148,8 @@ impl Symph {
 
         while buffer.len() > 0 {
             match self.decode_packet() {
-                Ok(_) => {},
-                Err(e) => return (readed, Err(e))
+                Ok(_) => {}
+                Err(e) => return (readed, Err(e)),
             }
 
             // self.buffer is always Some
@@ -155,7 +161,7 @@ impl Symph {
         (readed, Ok(()))
     }
 
-    fn decode_packet(&mut self) -> Result<()> {
+    fn decode_packet(&mut self) -> Result<(), Error> {
         let packet = loop {
             match self.probed.format.next_packet() {
                 Ok(p) => {
@@ -165,7 +171,7 @@ impl Symph {
                     break p;
                 }
                 // TODO: check for ResetRequired
-                Err(e) => return Err(Report::new(e)),
+                Err(e) => return Err(e.into()),
             }
         };
 
@@ -175,7 +181,7 @@ impl Symph {
                 self.source_channels = d.spec().channels.count() as u32;
                 Ok(())
             }
-            Err(e) => Err(Report::new(e)),
+            Err(e) => Err(e.into()),
         }
     }
 
@@ -247,4 +253,12 @@ impl Symph {
 
         i
     }
+}
+
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("Failed to select a track")]
+    CantSelectTrack,
+    #[error(transparent)]
+    SymphInner(#[from] symphonia::core::errors::Error),
 }

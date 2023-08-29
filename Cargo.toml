@@ -13,7 +13,8 @@ categories = ["multimedia::audio"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = "1.0.75"
 cpal = "0.15.2"
-eyre = "0.6.8"
 num = "0.4.1"
 symphonia = { version = "0.5.3", features = ["all"] }
+thiserror = "1.0.47"
