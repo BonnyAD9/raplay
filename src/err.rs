@@ -12,6 +12,13 @@ pub enum Error {
     UnsupportedSampleFormat,
     #[error("No available output device was found")]
     NoOutDevice,
+    #[error("{component} doesn't support {feature}")]
+    Unsupported {
+        component: &'static str,
+        feature: &'static str,
+    },
+    #[error("Cannot operate on a source because there is no source playing")]
+    NoSourceIsPlaying,
     #[error(transparent)]
     Cpal(#[from] CpalError),
     #[error(transparent)]

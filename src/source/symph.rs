@@ -1,11 +1,15 @@
+use std::time::Duration;
+
 use cpal::{SampleFormat, I24, U24};
 use symphonia::{
     core::{
         audio::AudioBufferRef,
         codecs::Decoder,
+        formats::{SeekMode, SeekTo},
         io::{MediaSource, MediaSourceStream, MediaSourceStreamOptions},
         probe::ProbeResult,
         sample::Sample,
+        units::Time,
     },
     default::{get_codecs, get_probe},
 };
@@ -30,6 +34,7 @@ pub struct Symph {
     track_id: u32,
     buffer_start: Option<usize>,
     volume: VolumeIterator,
+    last_ts: u64,
 }
 
 impl Symph {
@@ -72,6 +77,7 @@ impl Symph {
             track_id,
             buffer_start: None,
             volume: VolumeIterator::constant(1.),
+            last_ts: 0,
         })
     }
 }
@@ -126,6 +132,44 @@ impl Source for Symph {
         self.volume = volume;
         true
     }
+
+    fn seek(&mut self, time: Duration) -> anyhow::Result<()> {
+        self.probed.format.seek(
+            SeekMode::Coarse,
+            SeekTo::Time {
+                time: Time::new(
+                    time.as_secs(),
+                    time.as_secs_f64() - time.as_secs_f64().trunc(),
+                ),
+                track_id: Some(self.track_id),
+            },
+        )?;
+        self.buffer_start = None;
+        Ok(())
+    }
+
+    fn get_time(&self) -> Option<(Duration, Duration)> {
+        let par = self.decoder.codec_params();
+
+        if let Some(time_base) = par.time_base {
+            let cur = time_base.calc_time(self.last_ts);
+
+            let total = if let Some(f) = par.n_frames {
+                time_base.calc_time(f)
+            } else {
+                cur.clone()
+            };
+
+            Some((
+                Duration::from_secs(cur.seconds)
+                    + Duration::from_secs_f64(cur.frac),
+                Duration::from_secs(total.seconds)
+                    + Duration::from_secs_f64(total.frac),
+            ))
+        } else {
+            None
+        }
+    }
 }
 
 impl Symph {
@@ -168,9 +212,12 @@ impl Symph {
                     if p.track_id() != self.track_id {
                         continue;
                     }
+                    self.last_ts = p.ts;
                     break p;
                 }
-                // TODO: check for ResetRequired
+                Err(symphonia::core::errors::Error::ResetRequired) => {
+                    self.decoder.reset()
+                }
                 Err(e) => return Err(e.into()),
             }
         };

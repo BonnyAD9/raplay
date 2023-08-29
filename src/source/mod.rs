@@ -1,7 +1,9 @@
+use std::time::Duration;
+
 use anyhow::Result;
 use cpal::SampleFormat;
 
-use crate::sample_buffer::SampleBufferMut;
+use crate::{sample_buffer::SampleBufferMut, Error};
 
 pub mod sine;
 pub mod symph;
@@ -47,6 +49,25 @@ pub trait Source: Send {
         // just to ignore the warning but don't have to change the name
         _ = volume;
         false
+    }
+
+    /// Seeks to the given timestamp in the source.
+    fn seek(&mut self, time: Duration) -> Result<()> {
+        // just to ignore the warning but don't have to change the name
+        _ = time;
+        Err(Error::Unsupported {
+            component: "Source",
+            feature: "seeking",
+        }
+        .into())
+    }
+
+    /// Gets the current time and whole length
+    ///
+    /// # Returns
+    /// (current timestamp, total duration)
+    fn get_time(&self) -> Option<(Duration, Duration)> {
+        None
     }
 }
 

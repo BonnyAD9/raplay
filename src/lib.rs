@@ -9,9 +9,9 @@ pub use sink::Sink;
 
 #[cfg(test)]
 mod tests {
-    use std::{fs::File, io::stdin};
+    use std::{fs::File, io::stdin, time::Duration};
 
-    use crate::{err::Error, Sink, source::Symph};
+    use crate::{err::Error, source::Symph, Sink};
 
     use anyhow::Result;
 
@@ -25,11 +25,14 @@ mod tests {
         sink.on_err_callback(Some(|e: Error| println!("{}", e)))?;
         sink.volume(0.2)?;
         sink.load(src, true)?;
+        sink.seek_to(Duration::from_secs_f32(60.0))?;
         //thread::sleep(Duration::from_secs(5));
         loop {
             let mut s = String::new();
             _ = stdin().read_line(&mut s);
             sink.play(!sink.is_playing()?)?;
+            let ts = sink.get_timestamp()?;
+            println!("{:?}/{:?}", ts.0, ts.1);
         }
     }
 

@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::{
+    sync::{Arc, Mutex, MutexGuard},
+    time::Duration,
+};
 
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
@@ -267,6 +270,39 @@ impl Sink {
     ///   release them
     pub fn is_playing(&self) -> Result<bool> {
         Ok(self.shared.controls()?.play)
+    }
+
+    /// Seeks to the given position
+    ///
+    /// # Errors
+    /// - no source is playing
+    /// - the source doesn't support this
+    /// - failed to seek
+    pub fn seek_to(&mut self, timestamp: Duration) -> Result<()> {
+        self.shared
+            .source()?
+            .as_mut()
+            .ok_or(Error::NoSourceIsPlaying)?
+            .seek(timestamp)?;
+        Ok(())
+    }
+
+    /// Gets the current timestamp and the total length of the currently
+    /// playing source.
+    ///
+    /// # Errors
+    /// - no source is playing
+    /// - the source doesn't support this
+    pub fn get_timestamp(&self) -> Result<(Duration, Duration)> {
+        self.shared
+            .source()?
+            .as_ref()
+            .ok_or(Error::NoSourceIsPlaying)?
+            .get_time()
+            .ok_or(Error::Unsupported {
+                component: "Source",
+                feature: "getting current timestamp",
+            })
     }
 }
 
