@@ -1,14 +1,22 @@
 use cpal::Sample;
 
 // TODO: smarter conversion
+/// Iterator that converts number of channels
 pub struct ChannelConverter<S: Sample, I: Iterator<Item = S>> {
+    /// Original iterator
     source: I,
+    /// Number of channels in the original iterator
     source_channels: u32,
+    /// The target number of channels, how many channels should there be
+    /// after conversion
     target_channels: u32,
+    /// The index of the next channel that will be generated
     index: usize,
 }
 
 impl<S: Sample, I: Iterator<Item = S>> ChannelConverter<S, I> {
+    /// Creates new channel converter iterator from iterator source and the
+    /// source and target channel counts.
     pub fn new(source: I, source_channels: u32, target_channels: u32) -> Self {
         ChannelConverter {
             source,

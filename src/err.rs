@@ -2,27 +2,37 @@ use thiserror::Error;
 
 use crate::source::symph;
 
+/// Result with this crate error type [`Error`]
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// Error type of this crate
 #[derive(Error, Debug)]
 pub enum Error {
+    /// Error that is returned when something fails to lock some resource
     #[error("Failed to aquire lock")]
     PoisonError,
+    /// Returned when the device uses an unsupported sample format
     #[error("Format supported by the device is not supported by the library")]
     UnsupportedSampleFormat,
+    /// Returned when the sink fails to select output device
     #[error("No available output device was found")]
     NoOutDevice,
+    /// Returned when some feature is not supported
     #[error("{component} doesn't support {feature}")]
     Unsupported {
         component: &'static str,
         feature: &'static str,
     },
+    /// Returned when Sink tries to do action on Source, but there is no source
     #[error("Cannot operate on a source because there is no source playing")]
     NoSourceIsPlaying,
+    /// Cpal errors
     #[error(transparent)]
     Cpal(#[from] CpalError),
+    /// Errors from the [`crate::source::Symph`] source
     #[error(transparent)]
     Symph(#[from] symph::Error),
+    /// Any other error, usually from a custom source
     #[error(transparent)]
     Other(anyhow::Error),
 }

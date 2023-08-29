@@ -1,6 +1,7 @@
 use cpal::Sample;
 use num::{Float, NumCast, One, ToPrimitive, Zero};
 
+/// Iterator that converts sample rates
 pub struct RateConverter<S, I>
 where
     S: Sample + std::ops::Add<Output = S>,
@@ -20,6 +21,8 @@ where
     I: Iterator<Item = S>,
     S::Float: Float + NumCast,
 {
+    /// Craetes new iterator that converts the source iterator from the source
+    /// sample rate to the target sample rate
     pub fn new<R: ToPrimitive>(
         source: I,
         source_rate: R,
@@ -45,6 +48,7 @@ where
     type Item = S;
 
     fn next(&mut self) -> Option<Self::Item> {
+        // TODO: low pass filter
         if self.ratio.is_one() {
             return self.source.next();
         }

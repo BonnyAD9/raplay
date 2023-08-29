@@ -6,8 +6,12 @@ use self::{
 };
 
 ///! Useful conversions on samples
+
+/// Contains iterator that converts between channel counts
 pub mod channels;
+/// Contais iterator that interleaves channels
 pub mod interleave;
+/// Contains iterator that converts rate
 pub mod rate;
 
 /// Craetes iterator that interleaves the channels of `i`

@@ -1,9 +1,13 @@
+/// Iterator that interleaves channels
 pub struct Interleave<I: Iterator<Item = T>, T> {
+    /// Channels to interleave
     iterators: Vec<I>,
+    /// The channel that should be used next
     index: usize,
 }
 
 impl<I: Iterator<Item = T>, T> Interleave<I, T> {
+    /// Creates new interleave channel iterator
     pub fn new<II: Iterator<Item = I>>(iterators: II) -> Self {
         Interleave {
             iterators: iterators.collect(),

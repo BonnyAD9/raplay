@@ -9,10 +9,15 @@ use super::{Source, VolumeIterator};
 
 /// Source of sine waves
 pub struct SineSource {
+    /// Frequency of the sine wave
     frequency: f32,
+    /// Number of channels of the result
     channels: u32,
+    /// How much to step on the x axis for each sample
     iter_step: f32,
+    /// The x axis of the sine function
     iter: f32,
+    /// Creates multiplier for each sample
     volume: VolumeIterator,
 }
 
@@ -49,6 +54,7 @@ impl SineSource {
         }
     }
 
+    /// Generates sine wave
     fn generate<T: FromSample<f32> + Clone>(&mut self, mut data: &mut [T]) {
         while data.len() >= self.channels as usize {
             let val =

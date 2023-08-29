@@ -25,15 +25,25 @@ use super::{DeviceConfig, Source, VolumeIterator};
 
 /// Source that decodes audio using symphonia decoder
 pub struct Symph {
+    /// The sample rate of the device
     target_sample_rate: u32,
+    /// The channel count of the device
     target_channels: u32,
+    /// The sample rate of the decoded audio
     source_sample_rate: u32,
+    /// Number of channels of the decoded audio
     source_channels: u32,
+    /// The probe for the audio
     probed: ProbeResult,
+    /// The decoder for the audio
     decoder: Box<dyn Decoder>,
+    /// The track of the file that is played
     track_id: u32,
+    /// Index into the buffer, where to start reading next samples
     buffer_start: Option<usize>,
+    /// Yelds multiplier for each sample
     volume: VolumeIterator,
+    /// The timestamp of the last frame
     last_ts: u64,
 }
 
@@ -173,6 +183,7 @@ impl Source for Symph {
 }
 
 impl Symph {
+    /// Continues decoding the audio
     fn decode<T: UniSample>(
         &mut self,
         mut buffer: &mut [T],
@@ -196,7 +207,6 @@ impl Symph {
                 Err(e) => return (readed, Err(e)),
             }
 
-            // self.buffer is always Some
             let i = self.read_buffer(&mut buffer, 0);
             buffer = &mut buffer[i..];
             readed += i;
@@ -205,6 +215,7 @@ impl Symph {
         (readed, Ok(()))
     }
 
+    /// Decodes the next packet
     fn decode_packet(&mut self) -> Result<(), Error> {
         let packet = loop {
             match self.probed.format.next_packet() {
@@ -232,7 +243,8 @@ impl Symph {
         }
     }
 
-    /// self.buffer must be some
+    /// reads from the decoders buffer into the given buffer, returns number
+    /// of written samples
     fn read_buffer<T: UniSample>(
         &mut self,
         buffer: &mut &mut [T],
@@ -302,10 +314,13 @@ impl Symph {
     }
 }
 
+/// Error type for the symph
 #[derive(Error, Debug)]
 pub enum Error {
+    /// Cannot select track to decode
     #[error("Failed to select a track")]
     CantSelectTrack,
+    /// Error from symphonia
     #[error(transparent)]
     SymphInner(#[from] symphonia::core::errors::Error),
 }

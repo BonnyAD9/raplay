@@ -18,17 +18,25 @@ use crate::{
 
 /// A player that can play `Source`
 pub struct Sink {
+    /// Data shared with the playback loop ([`Mixer`])
     shared: Arc<SharedData>,
     // The stream is never read, it just stays alive so that the audio plays
+    /// The stream, if you drop this the playbakc loop will stop
     #[allow(dead_code)]
     stream: Option<Stream>,
+    /// Info about the current device configuration
     info: DeviceConfig,
 }
 
+/// Data shared between sink and the playback loop
 struct SharedData {
+    /// Used to control the playback loop from the [`Sink`]
     controls: Mutex<Controls>,
+    /// The source for the audio
     source: Mutex<Option<Box<dyn Source>>>,
+    /// Function used as callback from the playback loop on events
     callback: Mutex<Option<Box<dyn FnMut(CallbackInfo) + Send>>>,
+    /// Function used as callback when errors occur on the playback loop
     err_callback: Mutex<Option<Box<dyn FnMut(Error) + Send>>>,
 }
 
@@ -39,17 +47,25 @@ pub enum CallbackInfo {
     SourceEnded,
 }
 
+/// Used to control the playback loop from the sink
 #[derive(Clone)]
 struct Controls {
+    /// When true, playback plays, when false playback is paused
     play: bool,
+    /// Sets the volume of the playback
     volume: f32,
 }
 
+/// Struct that handles the playback loop
 struct Mixer {
+    /// Data shared with [`Sink`]
     shared: Arc<SharedData>,
 }
 
 impl Sink {
+    /// Creates the output stream and starts the playback loop.
+    /// `config` is preffered device configuration, [`None`] = choose
+    /// default.
     fn build_out_stream(
         &mut self,
         config: Option<DeviceConfig>,
@@ -321,10 +337,12 @@ impl Default for Sink {
 }
 
 impl Mixer {
+    /// Creates new [`Mixer`]
     fn new(shared: Arc<SharedData>) -> Self {
         Self { shared }
     }
 
+    /// Writes the data from the source to the buffer `data`
     fn mix(&mut self, data: &mut SampleBufferMut) {
         if let Err(e) = self.try_mix(data) {
             self.silence(data);
@@ -332,6 +350,7 @@ impl Mixer {
         }
     }
 
+    /// Tries to write the data from the source to the buffer `data`
     fn try_mix(&mut self, data: &mut SampleBufferMut) -> Result<()> {
         let controls = { self.shared.controls()?.clone() };
 
@@ -344,6 +363,7 @@ impl Mixer {
         Ok(())
     }
 
+    /// Writes the data from the source to the buffer `data`
     fn play_source(
         &mut self,
         data: &mut SampleBufferMut,
@@ -391,16 +411,19 @@ impl Mixer {
         }
     }
 
+    /// Writes silence to the buffer
     fn silence(&self, data: &mut SampleBufferMut) {
         operate_samples!(data, d, Self::write_silence(d));
     }
 
+    /// Writes silence to the buffer
     fn write_silence<T: cpal::Sample>(data: &mut [T]) {
         data.fill(T::EQUILIBRIUM);
     }
 }
 
 impl SharedData {
+    /// Creates new shared data
     fn new() -> Self {
         Self {
             controls: Mutex::new(Controls::new()),
@@ -410,14 +433,17 @@ impl SharedData {
         }
     }
 
+    /// Aquires lock on controls
     fn controls(&self) -> Result<MutexGuard<'_, Controls>> {
         Ok(self.controls.lock()?)
     }
 
+    /// Aquires lock on source
     fn source(&self) -> Result<MutexGuard<'_, Option<Box<dyn Source>>>> {
         Ok(self.source.lock()?)
     }
 
+    /// Aquires lock on callback function
     fn callback(
         &self,
     ) -> Result<MutexGuard<'_, Option<Box<dyn FnMut(CallbackInfo) + Send>>>>
@@ -425,12 +451,14 @@ impl SharedData {
         Ok(self.callback.lock()?)
     }
 
+    /// Aquires lock on error callback function
     fn err_callback(
         &self,
     ) -> Result<MutexGuard<'_, Option<Box<dyn FnMut(Error) + Send>>>> {
         Ok(self.err_callback.lock()?)
     }
 
+    /// Invokes callback function
     fn invoke_callback(&self, args: CallbackInfo) -> Result<()> {
         if let Some(cb) = self.callback()?.as_mut() {
             cb(args)
@@ -438,6 +466,7 @@ impl SharedData {
         Ok(())
     }
 
+    /// Invokes error callback function
     fn invoke_err_callback(&self, args: Error) -> Result<()> {
         if let Some(cb) = self.err_callback()?.as_mut() {
             cb(args)
@@ -453,6 +482,7 @@ impl Default for SharedData {
 }
 
 impl Controls {
+    /// Creates new controls
     pub fn new() -> Self {
         Self {
             play: false,
@@ -467,6 +497,7 @@ impl Default for Controls {
     }
 }
 
+/// Selects config based on the prefered configuration
 fn select_config(
     prefered: DeviceConfig,
     configs: SupportedOutputConfigs,
