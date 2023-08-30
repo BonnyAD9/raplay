@@ -26,7 +26,7 @@ mod tests {
         sink.on_err_callback(Some(|e: Error| println!("{}", e)))?;
         sink.volume(0.2)?;
         sink.load(src, true)?;
-        sink.seek_to(Duration::from_secs_f32(60.0))?;
+        sink.set_fade_len(Duration::from_millis(200))?;
         //thread::sleep(Duration::from_secs(5));
         loop {
             let mut s = String::new();

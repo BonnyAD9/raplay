@@ -253,6 +253,10 @@ impl Symph {
     where
         T::Float: From<f32>,
     {
+        if buffer.len() == 0 {
+            return 0;
+        }
+
         let samples = self.decoder.last_decoded();
         let mut i = 0;
 

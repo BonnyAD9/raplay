@@ -95,6 +95,11 @@ pub enum VolumeIterator {
         /// Multiplier for the resulting volume, used when the volume changes
         /// during the transition
         multiplier: f32,
+        /// The channel count of the result, each volume will be repeated
+        /// this amount of times
+        channel_count: usize,
+        /// The current channel index
+        cur_channel: usize,
     },
 }
 
@@ -108,13 +113,20 @@ impl VolumeIterator {
     ///
     /// The volume will start at the `start` volume and it will end at the
     /// `target` volume in `tick_count` samples
-    pub fn linear(start: f32, target: f32, tick_count: i32) -> Self {
+    pub fn linear(
+        start: f32,
+        target: f32,
+        tick_count: i32,
+        channels: usize,
+    ) -> Self {
         Self::Linear {
             base: start,
             step: (target - start) / tick_count as f32,
             cur_count: 0,
             target_count: tick_count.abs(),
             multiplier: 1.,
+            channel_count: channels,
+            cur_channel: 0,
         }
     }
 
@@ -127,6 +139,7 @@ impl VolumeIterator {
         target: f32,
         rate: u32,
         duration: Duration,
+        channels: usize,
     ) -> Self {
         if duration.is_zero() {
             Self::constant(target)
@@ -135,6 +148,7 @@ impl VolumeIterator {
                 start,
                 target,
                 (rate as f32 * duration.as_secs_f32()) as i32,
+                channels,
             )
         }
     }
@@ -142,9 +156,16 @@ impl VolumeIterator {
     /// Transforms this volume iterator to a linear iterator starting at
     /// the current volume and ending at the `target` volume in `tick_count`
     /// samples
-    pub fn to_linear(&mut self, target: f32, tick_count: i32) {
+    pub fn to_linear(
+        &mut self,
+        target: f32,
+        tick_count: i32,
+        channels: usize,
+    ) {
         match self {
-            Self::Constant(c) => *self = Self::linear(*c, target, tick_count),
+            Self::Constant(c) => {
+                *self = Self::linear(*c, target, tick_count, channels)
+            }
             Self::Linear {
                 base,
                 step,
@@ -156,6 +177,7 @@ impl VolumeIterator {
                     *base + *step * *cur_count as f32 * *multiplier,
                     target,
                     tick_count,
+                    channels,
                 );
             }
         }
@@ -169,11 +191,16 @@ impl VolumeIterator {
         target: f32,
         rate: u32,
         duration: Duration,
+        channels: usize,
     ) {
         if duration.is_zero() {
             *self = Self::constant(target)
         } else {
-            self.to_linear(target, (rate as f32 * duration.as_secs_f32()) as i32)
+            self.to_linear(
+                target,
+                (rate as f32 * duration.as_secs_f32()) as i32,
+                channels,
+            )
         }
     }
 
@@ -215,6 +242,35 @@ impl VolumeIterator {
         }
     }
 
+    /// behave as if the next_vol function was called n times
+    pub fn skip_vol(&mut self, n: usize) {
+        match self {
+            Self::Constant(_) => {}
+            Self::Linear {
+                base,
+                step,
+                cur_count,
+                target_count,
+                multiplier,
+                channel_count,
+                cur_channel,
+            } => {
+                *cur_count += (n / *channel_count) as i32;
+                *cur_channel += n % *channel_count;
+                if cur_channel > channel_count {
+                    *cur_count += 1;
+                    *cur_channel -= *channel_count;
+                }
+
+                if cur_count >= target_count {
+                    *self = Self::constant(
+                        (*base + *step * *target_count as f32) * *multiplier,
+                    );
+                }
+            }
+        }
+    }
+
     /// This is the same as next on the iterator
     ///
     /// # Returns
@@ -228,11 +284,17 @@ impl VolumeIterator {
                 cur_count,
                 target_count,
                 multiplier,
+                channel_count,
+                cur_channel,
             } => {
                 let ret = (*base + *step * *cur_count as f32) * *multiplier;
-                *cur_count += 1;
-                if cur_count == target_count {
-                    *self = Self::Constant(ret)
+                *cur_channel += 1;
+                if cur_channel == channel_count {
+                    *cur_channel = 0;
+                    *cur_count += 1;
+                    if cur_count >= target_count {
+                        *self = Self::Constant(ret)
+                    }
                 }
                 ret
             }

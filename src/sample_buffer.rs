@@ -1,5 +1,3 @@
-use std::{slice::SliceIndex, ops::{Index, IndexMut, Range}};
-
 /// Buffer of samples, this is enum that contains the possible types
 /// of samples in a buffer
 #[non_exhaustive]
@@ -36,7 +34,7 @@ pub enum SampleBufferMut<'a> {
 }
 
 /// Does operation on the variant of the buffer
-#[macro_export(local_inner_macros)]
+#[macro_export]
 macro_rules! operate_samples {
     ($buf:expr, $id:ident, $op:expr) => {{
         use $crate::sample_buffer::SampleBufferMut;
@@ -55,7 +53,11 @@ macro_rules! operate_samples {
     }};
 }
 
-#[macro_export(local_inner_macros)]
+// I wasn't able to make the following macros into functions because of some
+// lifetime requirements.
+
+/// Creates slice from the buffer
+#[macro_export]
 macro_rules! slice_sbuf {
     ($buf:expr, $range:expr) => {{
         use $crate::sample_buffer::SampleBufferMut;
@@ -74,10 +76,11 @@ macro_rules! slice_sbuf {
     }};
 }
 
-#[macro_export(local_inner_macros)]
+/// Writes silence into the buffer
+#[macro_export]
 macro_rules! silence_sbuf {
     ($buf:expr) => {
-        operate_samples!($buf, b, b.len())
+        operate_samples!($buf, b, write_silence(b))
     };
 }
 
@@ -87,7 +90,6 @@ impl<'a> SampleBufferMut<'a> {
         operate_samples!(self, b, b.len())
     }
 }
-
 
 /// Writes silence to the buffer
 pub fn write_silence<T: cpal::Sample>(data: &mut [T]) {

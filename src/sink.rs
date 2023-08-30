@@ -12,8 +12,9 @@ use cpal::{
 use crate::{
     err::{Error, Result},
     operate_samples,
-    sample_buffer::{SampleBufferMut, write_silence},
-    source::{DeviceConfig, Source, VolumeIterator}, slice_sbuf, silence_sbuf,
+    sample_buffer::{write_silence, SampleBufferMut},
+    silence_sbuf, slice_sbuf,
+    source::{DeviceConfig, Source, VolumeIterator},
 };
 
 /// A player that can play `Source`
@@ -64,14 +65,7 @@ struct Mixer {
     shared: Arc<SharedData>,
     /// Volume iterator presented to the source
     volume: VolumeIterator,
-    /// When true the volume is changing to play, when false the volume is
-    /// changing to pause.
-    ///
-    /// The value of the variable make sense only when `volume.until_target` is
-    /// Some.
-    playing: bool,
-    /// Saves the last state of play, if none it should be interpreted that
-    /// the last state is the same as the current state
+    /// The last status of play
     last_play: Option<bool>,
     /// Info about the device that is playing
     info: DeviceConfig,
@@ -335,6 +329,12 @@ impl Sink {
                 feature: "getting current timestamp",
             })
     }
+
+    /// Sets the fade-in/fade-out time for play/pause
+    pub fn set_fade_len(&mut self, fade: Duration) -> Result<()> {
+        self.shared.controls()?.fade_duration = fade;
+        Ok(())
+    }
 }
 
 impl Default for Sink {
@@ -357,7 +357,6 @@ impl Mixer {
         Self {
             shared,
             volume: VolumeIterator::default(),
-            playing: false,
             last_play: None,
             info,
         }
@@ -372,35 +371,55 @@ impl Mixer {
     }
 
     /// Tries to write the data from the source to the buffer `data`
-    fn try_mix<'a, 'b: 'a>(&mut self, data: &'a mut SampleBufferMut<'b>) -> Result<()> {
+    fn try_mix<'a, 'b: 'a>(
+        &mut self,
+        data: &'a mut SampleBufferMut<'b>,
+    ) -> Result<()> {
         let controls = { self.shared.controls()?.clone() };
 
         let lp = self.last_play.unwrap_or(controls.play);
+        self.last_play = Some(controls.play);
 
-        self.volume.set_volume(controls.volume, self.playing);
+        self.volume.set_volume(controls.volume, lp);
 
         if controls.play {
             // Change the volume transition if the transition is to pause or
             // if it was previously paused
-            if (matches!(self.volume.until_target(), Some(_)) && !self.playing) || !lp {
-                self.volume.to_linear_time_rate(controls.volume, self.info.sample_rate, controls.fade_duration);
+            if !lp {
+                if self.volume.until_target().is_none() {
+                    self.volume.set_volume(0., lp);
+                }
+
+                self.volume.to_linear_time_rate(
+                    controls.volume,
+                    self.info.sample_rate,
+                    controls.fade_duration,
+                    self.info.channel_count as usize,
+                );
             }
 
             self.play_source(data, controls)?;
         } else {
             // Change the volume transition if the transition is to play or
             // if it was previously played
-            if (matches!(self.volume.until_target(), Some(_)) && self.playing) || lp {
-                self.volume.to_linear_time_rate(controls.volume, self.info.sample_rate, controls.fade_duration);
+            if lp {
+                self.volume.to_linear_time_rate(
+                    0.,
+                    self.info.sample_rate,
+                    controls.fade_duration,
+                    self.info.channel_count as usize,
+                );
             }
 
-            let len = self.volume.until_target().unwrap_or(usize::MAX).min(data.len());
+            let len = (self.volume.until_target().unwrap_or(0)
+                * self.info.channel_count as usize)
+                .min(data.len());
 
-            // play the silencing
-            {
-                let mut s = slice_sbuf!(data, 0..len);
-                self.play_source(&mut s, controls)?;
+            if len != 0 {
+                // play the silencing
+                self.play_source(&mut slice_sbuf!(data, 0..len), controls)?;
             }
+
             // than pause
             let data_len = data.len();
             silence_sbuf!(slice_sbuf!(data, len..data_len));
@@ -419,13 +438,16 @@ impl Mixer {
 
         match src.as_mut() {
             Some(s) => {
-                let supports_volume =
-                    s.volume(VolumeIterator::constant(controls.volume));
+                let supports_volume = s.volume(self.volume);
 
                 let (cnt, e) = s.read(data);
 
                 if let Err(e) = e {
                     _ = self.shared.invoke_err_callback(e.into());
+                }
+
+                if supports_volume {
+                    self.volume.skip_vol(cnt);
                 }
 
                 operate_samples!(data, d, {
@@ -434,7 +456,8 @@ impl Mixer {
                     if !supports_volume {
                         if controls.volume != 1. {
                             for s in d.iter_mut() {
-                                *s = (*s).mul_amp(controls.volume.into());
+                                *s = (*s)
+                                    .mul_amp(self.volume.next_vol().into());
                             }
                         } else if controls.volume == 0. {
                             write_silence(&mut d[..cnt]);
