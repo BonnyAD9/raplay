@@ -23,7 +23,7 @@ supported formats are the same as symphonia.
 ```rust
 use raplay::{Sink, source::SineSource};
 
-let sink = Sink::default_out(); // get the default output
+let sink = Sink::default(); // get the default output
 let src = SineSource::new(1000.); // create 1000Hz sine source
 sink.load(src, true)?; // play the sine wave
 ```
@@ -33,7 +33,7 @@ sink.load(src, true)?; // play the sine wave
 use std::fs::File;
 use raplay::{Sink, source::Symph};
 
-let sink = Sink::default_out(); // get the default output
+let sink = Sink::default(); // get the default output
 let file = File::open("music.mp3")?; // open the mp3 file
 let src = Symph::try_new(file)?; // create a symphonia decoder source
 sink.load(src, true)?; // play the mp3 file
