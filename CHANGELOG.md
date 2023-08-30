@@ -9,6 +9,9 @@
 
 ### API Changes
 - Sink is created with its Default implementation
+- Move some names closer to root in namespaces
+- Custom error type
+- Migrate from eyre to anyhow
 
 ## v0.1.2
 ### Bugfixes
