@@ -5,7 +5,6 @@ pub mod sink;
 pub mod source;
 
 ///! Library for playing audio
-
 pub use err::Error;
 pub use sink::Sink;
 

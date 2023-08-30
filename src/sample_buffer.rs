@@ -1,3 +1,5 @@
+use std::{slice::SliceIndex, ops::{Index, IndexMut, Range}};
+
 /// Buffer of samples, this is enum that contains the possible types
 /// of samples in a buffer
 #[non_exhaustive]
@@ -34,11 +36,10 @@ pub enum SampleBufferMut<'a> {
 }
 
 /// Does operation on the variant of the buffer
-///
-/// you need to import SampleBufferMut for this to work
 #[macro_export(local_inner_macros)]
 macro_rules! operate_samples {
-    ($buf:expr, $id:ident, $op:expr) => {
+    ($buf:expr, $id:ident, $op:expr) => {{
+        use $crate::sample_buffer::SampleBufferMut;
         match $buf {
             SampleBufferMut::I8($id) => $op,
             SampleBufferMut::I16($id) => $op,
@@ -51,5 +52,44 @@ macro_rules! operate_samples {
             SampleBufferMut::F32($id) => $op,
             SampleBufferMut::F64($id) => $op,
         }
+    }};
+}
+
+#[macro_export(local_inner_macros)]
+macro_rules! slice_sbuf {
+    ($buf:expr, $range:expr) => {{
+        use $crate::sample_buffer::SampleBufferMut;
+        match $buf {
+            SampleBufferMut::I8(d) => SampleBufferMut::I8(&mut d[$range]),
+            SampleBufferMut::I16(d) => SampleBufferMut::I16(&mut d[$range]),
+            SampleBufferMut::I32(d) => SampleBufferMut::I32(&mut d[$range]),
+            SampleBufferMut::I64(d) => SampleBufferMut::I64(&mut d[$range]),
+            SampleBufferMut::U8(d) => SampleBufferMut::U8(&mut d[$range]),
+            SampleBufferMut::U16(d) => SampleBufferMut::U16(&mut d[$range]),
+            SampleBufferMut::U32(d) => SampleBufferMut::U32(&mut d[$range]),
+            SampleBufferMut::U64(d) => SampleBufferMut::U64(&mut d[$range]),
+            SampleBufferMut::F32(d) => SampleBufferMut::F32(&mut d[$range]),
+            SampleBufferMut::F64(d) => SampleBufferMut::F64(&mut d[$range]),
+        }
+    }};
+}
+
+#[macro_export(local_inner_macros)]
+macro_rules! silence_sbuf {
+    ($buf:expr) => {
+        operate_samples!($buf, b, b.len())
     };
+}
+
+impl<'a> SampleBufferMut<'a> {
+    /// Gets the number of items in the buffer
+    pub fn len(&self) -> usize {
+        operate_samples!(self, b, b.len())
+    }
+}
+
+
+/// Writes silence to the buffer
+pub fn write_silence<T: cpal::Sample>(data: &mut [T]) {
+    data.fill(T::EQUILIBRIUM);
 }

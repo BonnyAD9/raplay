@@ -104,7 +104,7 @@ impl Source for Symph {
         buffer: &mut SampleBufferMut,
     ) -> (usize, anyhow::Result<()>) {
         operate_samples!(buffer, b, {
-            let (l, e) = self.decode(*b);
+            let (l, e) = self.decode(b);
             (l, e.map_err(|e| err::Error::Symph(e).into()))
         })
     }

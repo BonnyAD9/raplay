@@ -15,7 +15,7 @@ pub use symph::Symph;
 // TODO: fallback sample format when unsupported sample rate
 // TODO: go back to reasonable settings when no prefered config
 /// Information needed to properly play sound
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct DeviceConfig {
     pub channel_count: u32,
     pub sample_rate: u32,
@@ -72,27 +72,171 @@ pub trait Source: Send {
 }
 
 /// Iterates over volume of sequence of samples
-/// A sample should be multiplied by the value returned by the iterator
+/// A sample should be multiplied by the value returned by the iterator.
+///
+/// The multiplication must be done in the target sample rate.
 ///
 /// Calling [`Iterator::next`] never returns [`None`], if you don't
-/// want to get the [`Option`] you can use [`VolumeIterator::next_vol`]
+/// want to get the [`Option`] you can use [`VolumeIterator::next_vol`].
 #[derive(Clone, Copy, Debug)]
-pub struct VolumeIterator {
-    volume: f32,
+pub enum VolumeIterator {
+    /// Constant volume
+    Constant(f32),
+    /// Changes the volume in linear time, than transitions to the constant
+    Linear {
+        /// The starting volume
+        base: f32,
+        /// How much volume change is single tick
+        step: f32,
+        /// Current tick
+        cur_count: i32,
+        /// The target tick, must be larger or equal to cur_count
+        target_count: i32,
+        /// Multiplier for the resulting volume, used when the volume changes
+        /// during the transition
+        multiplier: f32,
+    },
 }
 
 impl VolumeIterator {
-    /// Creates volume iterator with constant volume
+    /// Creates constant volume
     pub fn constant(volume: f32) -> Self {
-        Self { volume }
+        Self::Constant(volume)
+    }
+
+    /// Creates volume iterator that changes lineary with time.
+    ///
+    /// The volume will start at the `start` volume and it will end at the
+    /// `target` volume in `tick_count` samples
+    pub fn linear(start: f32, target: f32, tick_count: i32) -> Self {
+        Self::Linear {
+            base: start,
+            step: (target - start) / tick_count as f32,
+            cur_count: 0,
+            target_count: tick_count.abs(),
+            multiplier: 1.,
+        }
+    }
+
+    /// Creates volume iterator that changes lineary with time.
+    ///
+    /// The volume will start at the `start` volume and it will end at the
+    /// `target` volume in the given `duration` if the rate is the given `rate`
+    pub fn linear_time_rate(
+        start: f32,
+        target: f32,
+        rate: u32,
+        duration: Duration,
+    ) -> Self {
+        if duration.is_zero() {
+            Self::constant(target)
+        } else {
+            Self::linear(
+                start,
+                target,
+                (rate as f32 * duration.as_secs_f32()) as i32,
+            )
+        }
+    }
+
+    /// Transforms this volume iterator to a linear iterator starting at
+    /// the current volume and ending at the `target` volume in `tick_count`
+    /// samples
+    pub fn to_linear(&mut self, target: f32, tick_count: i32) {
+        match self {
+            Self::Constant(c) => *self = Self::linear(*c, target, tick_count),
+            Self::Linear {
+                base,
+                step,
+                cur_count,
+                multiplier,
+                ..
+            } => {
+                *self = Self::linear(
+                    *base + *step * *cur_count as f32 * *multiplier,
+                    target,
+                    tick_count,
+                );
+            }
+        }
+    }
+
+    /// Transforms this volume iterator to a linear iterator starting at
+    /// the current volume and ending at the `target` volume in `tick_count`
+    /// samples
+    pub fn to_linear_time_rate(
+        &mut self,
+        target: f32,
+        rate: u32,
+        duration: Duration,
+    ) {
+        if duration.is_zero() {
+            *self = Self::constant(target)
+        } else {
+            self.to_linear(target, (rate as f32 * duration.as_secs_f32()) as i32)
+        }
+    }
+
+    /// Returns the number of ticks remaining to get to the target volume
+    /// Returns none if the type is constant.
+    pub fn until_target(&self) -> Option<usize> {
+        match self {
+            Self::Constant(_) => None,
+            Self::Linear {
+                cur_count,
+                target_count,
+                ..
+            } => Some((target_count - cur_count).abs() as usize),
+        }
+    }
+
+    /// Changes the volume of the iterator
+    ///
+    /// The `target` wheter in case of transition the source or target
+    /// volume is changed. When `target` is true tha target volume is changed,
+    /// when target is false the start volume is changed.
+    pub fn set_volume(&mut self, volume: f32, target: bool) {
+        match self {
+            Self::Constant(_) => *self = Self::Constant(volume),
+            Self::Linear {
+                base,
+                multiplier,
+                target_count,
+                step,
+                ..
+            } => {
+                *multiplier = volume
+                    / if target {
+                        *base + *step * *target_count as f32
+                    } else {
+                        *base
+                    };
+            }
+        }
     }
 
     /// This is the same as next on the iterator
     ///
     /// # Returns
     /// Volume for the next sample
-    pub fn next_vol(&self) -> f32 {
-        self.volume
+    pub fn next_vol(&mut self) -> f32 {
+        match self {
+            Self::Constant(vol) => *vol,
+            Self::Linear {
+                base,
+                step,
+                cur_count,
+                target_count,
+                multiplier,
+            } => {
+                let ret = (*base + *step * *cur_count as f32) * *multiplier;
+                *cur_count += 1;
+                if cur_count == target_count {
+                    *self = Self::Constant(ret)
+                }
+                ret
+            }
+        }
     }
 }
 
@@ -105,5 +249,11 @@ impl Iterator for VolumeIterator {
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         (usize::MAX, None)
+    }
+}
+
+impl Default for VolumeIterator {
+    fn default() -> Self {
+        VolumeIterator::Constant(1.)
     }
 }

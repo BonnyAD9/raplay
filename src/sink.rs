@@ -12,8 +12,8 @@ use cpal::{
 use crate::{
     err::{Error, Result},
     operate_samples,
-    sample_buffer::SampleBufferMut,
-    source::{DeviceConfig, Source, VolumeIterator},
+    sample_buffer::{SampleBufferMut, write_silence},
+    source::{DeviceConfig, Source, VolumeIterator}, slice_sbuf, silence_sbuf,
 };
 
 /// A player that can play `Source`
@@ -50,6 +50,8 @@ pub enum CallbackInfo {
 /// Used to control the playback loop from the sink
 #[derive(Clone)]
 struct Controls {
+    /// Fade duration when play/pause
+    fade_duration: Duration,
     /// When true, playback plays, when false playback is paused
     play: bool,
     /// Sets the volume of the playback
@@ -60,6 +62,19 @@ struct Controls {
 struct Mixer {
     /// Data shared with [`Sink`]
     shared: Arc<SharedData>,
+    /// Volume iterator presented to the source
+    volume: VolumeIterator,
+    /// When true the volume is changing to play, when false the volume is
+    /// changing to pause.
+    ///
+    /// The value of the variable make sense only when `volume.until_target` is
+    /// Some.
+    playing: bool,
+    /// Saves the last state of play, if none it should be interpreted that
+    /// the last state is the same as the current state
+    last_play: Option<bool>,
+    /// Info about the device that is playing
+    info: DeviceConfig,
 }
 
 impl Sink {
@@ -86,7 +101,7 @@ impl Sink {
         };
 
         let shared = self.shared.clone();
-        let mut mixer = Mixer::new(shared.clone());
+        let mut mixer = Mixer::new(shared.clone(), self.info.clone());
 
         let config = config.into();
         macro_rules! arm {
@@ -338,26 +353,57 @@ impl Default for Sink {
 
 impl Mixer {
     /// Creates new [`Mixer`]
-    fn new(shared: Arc<SharedData>) -> Self {
-        Self { shared }
+    fn new(shared: Arc<SharedData>, info: DeviceConfig) -> Self {
+        Self {
+            shared,
+            volume: VolumeIterator::default(),
+            playing: false,
+            last_play: None,
+            info,
+        }
     }
 
     /// Writes the data from the source to the buffer `data`
-    fn mix(&mut self, data: &mut SampleBufferMut) {
+    fn mix<'a, 'b: 'a>(&mut self, data: &'a mut SampleBufferMut<'b>) {
         if let Err(e) = self.try_mix(data) {
-            self.silence(data);
+            silence_sbuf!(data);
             _ = self.shared.invoke_err_callback(e);
         }
     }
 
     /// Tries to write the data from the source to the buffer `data`
-    fn try_mix(&mut self, data: &mut SampleBufferMut) -> Result<()> {
+    fn try_mix<'a, 'b: 'a>(&mut self, data: &'a mut SampleBufferMut<'b>) -> Result<()> {
         let controls = { self.shared.controls()?.clone() };
 
+        let lp = self.last_play.unwrap_or(controls.play);
+
+        self.volume.set_volume(controls.volume, self.playing);
+
         if controls.play {
+            // Change the volume transition if the transition is to pause or
+            // if it was previously paused
+            if (matches!(self.volume.until_target(), Some(_)) && !self.playing) || !lp {
+                self.volume.to_linear_time_rate(controls.volume, self.info.sample_rate, controls.fade_duration);
+            }
+
             self.play_source(data, controls)?;
         } else {
-            self.silence(data)
+            // Change the volume transition if the transition is to play or
+            // if it was previously played
+            if (matches!(self.volume.until_target(), Some(_)) && self.playing) || lp {
+                self.volume.to_linear_time_rate(controls.volume, self.info.sample_rate, controls.fade_duration);
+            }
+
+            let len = self.volume.until_target().unwrap_or(usize::MAX).min(data.len());
+
+            // play the silencing
+            {
+                let mut s = slice_sbuf!(data, 0..len);
+                self.play_source(&mut s, controls)?;
+            }
+            // than pause
+            let data_len = data.len();
+            silence_sbuf!(slice_sbuf!(data, len..data_len));
         }
 
         Ok(())
@@ -391,11 +437,11 @@ impl Mixer {
                                 *s = (*s).mul_amp(controls.volume.into());
                             }
                         } else if controls.volume == 0. {
-                            Self::write_silence(&mut d[..cnt]);
+                            write_silence(&mut d[..cnt]);
                         }
                     }
 
-                    Self::write_silence(&mut d[cnt..]);
+                    write_silence(&mut d[cnt..]);
                     if cnt < d.len() {
                         *src = None;
                         self.shared.invoke_callback(CallbackInfo::SourceEnded)
@@ -405,20 +451,10 @@ impl Mixer {
                 })
             }
             None => {
-                self.silence(data);
+                silence_sbuf!(data);
                 Ok(())
             }
         }
-    }
-
-    /// Writes silence to the buffer
-    fn silence(&self, data: &mut SampleBufferMut) {
-        operate_samples!(data, d, Self::write_silence(d));
-    }
-
-    /// Writes silence to the buffer
-    fn write_silence<T: cpal::Sample>(data: &mut [T]) {
-        data.fill(T::EQUILIBRIUM);
     }
 }
 
@@ -485,6 +521,7 @@ impl Controls {
     /// Creates new controls
     pub fn new() -> Self {
         Self {
+            fade_duration: Duration::ZERO,
             play: false,
             volume: 1.,
         }
