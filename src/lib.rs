@@ -21,7 +21,7 @@ mod tests {
         let mut sink = Sink::default();
         let src = Symph::try_new(File::open(
             "/home/kubas/Music/AJR - Neotheater - 01 Next Up Forever.flac",
-        )?)?;
+        )?, &Default::default())?;
         sink.on_callback(Some(|_| println!("callback")))?;
         sink.on_err_callback(Some(|e: Error| println!("{}", e)))?;
         sink.volume(0.2)?;

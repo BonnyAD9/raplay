@@ -15,6 +15,8 @@ use symphonia::{
 };
 use thiserror::Error;
 
+pub use symphonia::core::formats::FormatOptions;
+
 use crate::{
     converters::{do_channels_rate, interleave, UniSample},
     err, operate_samples,
@@ -56,6 +58,7 @@ impl Symph {
     /// - no decoder was found for the codec, insufficient codec parameters
     pub fn try_new<T: MediaSource + 'static>(
         source: T,
+        opt: &SymphOptions
     ) -> Result<Symph, Error> {
         let stream = MediaSourceStream::new(
             Box::new(source),
@@ -65,7 +68,7 @@ impl Symph {
         let pres = get_probe().format(
             &Default::default(),
             stream,
-            &Default::default(),
+            &opt.format,
             &Default::default(),
         )?;
 
@@ -316,6 +319,11 @@ impl Symph {
 
         i
     }
+}
+
+#[derive(Default)]
+pub struct SymphOptions {
+    pub format: FormatOptions,
 }
 
 /// Error type for the symph
