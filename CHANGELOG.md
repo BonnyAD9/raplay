@@ -7,6 +7,9 @@
 - Gapless playback
 - Fade-in/fade-out on play/pause
 
+### API Changes
+- Sink is created with its Default implementation
+
 ## v0.1.2
 ### Bugfixes
 - some files would play only first few frames
