@@ -10,7 +10,7 @@ pub use sink::Sink;
 
 #[cfg(test)]
 mod tests {
-    use std::{fs::File, io::stdin, time::Duration};
+    /*use std::{fs::File, io::stdin, time::Duration};
 
     use crate::{err::Error, source::Symph, Sink};
 
@@ -35,7 +35,7 @@ mod tests {
             let ts = sink.get_timestamp()?;
             println!("{:?}/{:?}", ts.0, ts.1);
         }
-    }
+    }*/
 
     /*#[test]
     fn play_sine() -> Result<()> {
