@@ -8,6 +8,9 @@ The library is very new and not much tested.
 - Callback when audio ends
 - Callback for errors
 - Volume
+- Seeking
+- Get audio position and length
+- Fade-in/fade-out on play/pause
 
 ## Supported formats
 All the decoding is done by
