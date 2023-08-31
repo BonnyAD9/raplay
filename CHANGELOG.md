@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.1
+### Bugfixes
+- Symph was mot using `err::Error` in pulic api
+
 ## v0.2.0
 ### New features
 - Seeking

@@ -58,27 +58,30 @@ impl Symph {
     /// - no decoder was found for the codec, insufficient codec parameters
     pub fn try_new<T: MediaSource + 'static>(
         source: T,
-        opt: &SymphOptions
-    ) -> Result<Symph, Error> {
+        opt: &SymphOptions,
+    ) -> err::Result<Symph> {
         let stream = MediaSourceStream::new(
             Box::new(source),
             MediaSourceStreamOptions::default(),
         );
 
-        let pres = get_probe().format(
-            &Default::default(),
-            stream,
-            &opt.format,
-            &Default::default(),
-        )?;
+        let pres = get_probe()
+            .format(
+                &Default::default(),
+                stream,
+                &opt.format,
+                &Default::default(),
+            )
+            .map_err(|e| Error::SymphInner(e))?;
 
         // TODO: select other track if the default is unavailable
         let track =
             pres.format.default_track().ok_or(Error::CantSelectTrack)?;
         let track_id = track.id;
 
-        let decoder =
-            get_codecs().make(&track.codec_params, &Default::default())?;
+        let decoder = get_codecs()
+            .make(&track.codec_params, &Default::default())
+            .map_err(|e| Error::SymphInner(e))?;
 
         Ok(Symph {
             target_sample_rate: 0,
