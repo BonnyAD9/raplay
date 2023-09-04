@@ -150,7 +150,7 @@ impl Source for Symph {
     }
 
     fn seek(&mut self, time: Duration) -> anyhow::Result<()> {
-        self.probed.format.seek(
+        let pos = self.probed.format.seek(
             SeekMode::Coarse,
             SeekTo::Time {
                 time: Time::new(
@@ -161,6 +161,7 @@ impl Source for Symph {
             },
         )?;
         self.buffer_start = None;
+        self.last_ts = pos.actual_ts;
         Ok(())
     }
 
