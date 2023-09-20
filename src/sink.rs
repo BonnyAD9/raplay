@@ -23,7 +23,6 @@ pub struct Sink {
     shared: Arc<SharedData>,
     // The stream is never read, it just stays alive so that the audio plays
     /// The stream, if you drop this the playbakc loop will stop
-    #[allow(dead_code)]
     stream: Option<Stream>,
     /// Info about the current device configuration
     info: DeviceConfig,
@@ -43,9 +42,12 @@ struct SharedData {
 
 /// Callback type and asociated information
 #[non_exhaustive]
+#[derive(Debug)]
 pub enum CallbackInfo {
     /// Invoked when the current source has reached end
     SourceEnded,
+    /// Invoked when no sound is playing and you can call hard_pause
+    PauseEnded,
 }
 
 /// Used to control the playback loop from the sink
@@ -67,6 +69,7 @@ struct Mixer {
     volume: VolumeIterator,
     /// The last status of play
     last_play: Option<bool>,
+    last_sound: bool,
     /// Info about the device that is playing
     info: DeviceConfig,
 }
@@ -228,6 +231,16 @@ impl Sink {
     ///   release them
     pub fn play(&self, play: bool) -> Result<()> {
         self.shared.controls()?.play = play;
+        if let Some(s) = &self.stream {
+            s.play()?;
+        }
+        Ok(())
+    }
+
+    pub fn hard_pause(&self) -> Result<()> {
+        if let Some(s) = &self.stream {
+            s.pause()?;
+        }
         Ok(())
     }
 
@@ -358,6 +371,7 @@ impl Mixer {
             shared,
             volume: VolumeIterator::default(),
             last_play: None,
+            last_sound: true,
             info,
         }
     }
@@ -383,6 +397,8 @@ impl Mixer {
         self.volume.set_volume(controls.volume, lp);
 
         if controls.play {
+            self.last_sound = true;
+
             // Change the volume transition if the transition is to pause or
             // if it was previously paused
             if !lp {
@@ -418,11 +434,22 @@ impl Mixer {
             if len != 0 {
                 // play the silencing
                 self.play_source(&mut slice_sbuf!(data, 0..len), controls)?;
+                self.last_sound = true;
             }
 
             // than pause
             let data_len = data.len();
             silence_sbuf!(slice_sbuf!(data, len..data_len));
+
+            // TODO: Edge case
+            if data_len - len != 0 && self.last_sound {
+                if let Err(e) =
+                    self.shared.invoke_callback(CallbackInfo::PauseEnded)
+                {
+                    _ = self.shared.invoke_err_callback(e);
+                };
+                self.last_sound = false;
+            }
         }
 
         Ok(())

@@ -79,4 +79,5 @@ impl_cpal!(
     BuildStream -> cpal::BuildStreamError,
     PlayStream -> cpal::PlayStreamError,
     SupportedConfigs -> cpal::SupportedStreamConfigsError,
+    PauseStreamError -> cpal::PauseStreamError,
 );
