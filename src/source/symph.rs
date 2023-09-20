@@ -20,7 +20,7 @@ pub use symphonia::core::formats::FormatOptions;
 use crate::{
     converters::{do_channels_rate, interleave, UniSample},
     err, operate_samples,
-    sample_buffer::SampleBufferMut,
+    sample_buffer::SampleBufferMut, Timestamp,
 };
 
 use super::{DeviceConfig, Source, VolumeIterator};
@@ -149,7 +149,7 @@ impl Source for Symph {
         true
     }
 
-    fn seek(&mut self, time: Duration) -> anyhow::Result<()> {
+    fn seek(&mut self, time: Duration) -> anyhow::Result<Timestamp> {
         let pos = self.probed.format.seek(
             SeekMode::Coarse,
             SeekTo::Time {
@@ -162,10 +162,10 @@ impl Source for Symph {
         )?;
         self.buffer_start = None;
         self.last_ts = pos.actual_ts;
-        Ok(())
+        self.get_time().ok_or(err::Error::CannotDetermineTimestamp.into())
     }
 
-    fn get_time(&self) -> Option<(Duration, Duration)> {
+    fn get_time(&self) -> Option<Timestamp> {
         let par = self.decoder.codec_params();
 
         if let Some(time_base) = par.time_base {
@@ -177,7 +177,7 @@ impl Source for Symph {
                 cur.clone()
             };
 
-            Some((
+            Some(Timestamp::new(
                 Duration::from_secs(cur.seconds)
                     + Duration::from_secs_f64(cur.frac),
                 Duration::from_secs(total.seconds)

@@ -3,10 +3,12 @@ pub mod err;
 pub mod sample_buffer;
 pub mod sink;
 pub mod source;
+mod timestamp;
 
 ///! Library for playing audio
 pub use err::Error;
 pub use sink::Sink;
+pub use timestamp::Timestamp;
 
 #[cfg(test)]
 mod tests {

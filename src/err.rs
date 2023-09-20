@@ -8,6 +8,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// Error type of this crate
 #[derive(Error, Debug)]
 pub enum Error {
+    #[error("Failed to convert to timestamp")]
+    CannotDetermineTimestamp,
     /// Error that is returned when something fails to lock some resource
     #[error("Failed to aquire lock")]
     PoisonError,

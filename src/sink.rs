@@ -15,6 +15,7 @@ use crate::{
     sample_buffer::{write_silence, SampleBufferMut},
     silence_sbuf, slice_sbuf,
     source::{DeviceConfig, Source, VolumeIterator},
+    Timestamp,
 };
 
 /// A player that can play `Source`
@@ -322,13 +323,13 @@ impl Sink {
     /// - no source is playing
     /// - the source doesn't support this
     /// - failed to seek
-    pub fn seek_to(&mut self, timestamp: Duration) -> Result<()> {
-        self.shared
+    pub fn seek_to(&mut self, timestamp: Duration) -> Result<Timestamp> {
+        Ok(self
+            .shared
             .source()?
             .as_mut()
             .ok_or(Error::NoSourceIsPlaying)?
-            .seek(timestamp)?;
-        Ok(())
+            .seek(timestamp)?)
     }
 
     /// Gets the current timestamp and the total length of the currently
@@ -337,7 +338,7 @@ impl Sink {
     /// # Errors
     /// - no source is playing
     /// - the source doesn't support this
-    pub fn get_timestamp(&self) -> Result<(Duration, Duration)> {
+    pub fn get_timestamp(&self) -> Result<Timestamp> {
         self.shared
             .source()?
             .as_ref()

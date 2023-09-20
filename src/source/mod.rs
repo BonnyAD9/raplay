@@ -3,7 +3,7 @@ use std::time::Duration;
 use anyhow::Result;
 use cpal::SampleFormat;
 
-use crate::{sample_buffer::SampleBufferMut, Error};
+use crate::{sample_buffer::SampleBufferMut, Error, Timestamp};
 
 pub mod sine;
 pub mod symph;
@@ -52,7 +52,7 @@ pub trait Source: Send {
     }
 
     /// Seeks to the given timestamp in the source.
-    fn seek(&mut self, time: Duration) -> Result<()> {
+    fn seek(&mut self, time: Duration) -> Result<Timestamp> {
         // just to ignore the warning but don't have to change the name
         _ = time;
         Err(Error::Unsupported {
@@ -66,7 +66,7 @@ pub trait Source: Send {
     ///
     /// # Returns
     /// (current timestamp, total duration)
-    fn get_time(&self) -> Option<(Duration, Duration)> {
+    fn get_time(&self) -> Option<Timestamp> {
         None
     }
 }
