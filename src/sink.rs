@@ -1,20 +1,17 @@
-use std::{
-    sync::{Arc, Mutex, MutexGuard},
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
-    BufferSize, Sample, SampleFormat, SampleRate, Stream, SupportedBufferSize,
+    BufferSize, SampleFormat, SampleRate, Stream, SupportedBufferSize,
     SupportedOutputConfigs, SupportedStreamConfig,
 };
 
 use crate::{
     err::{Error, Result},
-    operate_samples,
-    sample_buffer::{write_silence, SampleBufferMut},
-    silence_sbuf, slice_sbuf,
-    source::{DeviceConfig, Source, VolumeIterator},
+    mixer::Mixer,
+    sample_buffer::SampleBufferMut,
+    shared::{CallbackInfo, SharedData},
+    source::{DeviceConfig, Source},
     Timestamp,
 };
 
@@ -27,59 +24,8 @@ pub struct Sink {
     stream: Option<Stream>,
     /// Info about the current device configuration
     info: DeviceConfig,
+    /// Sink will try to get the buffer size to be this
     preferred_buffer_size: Option<u32>,
-}
-
-impl std::fmt::Debug for Sink {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Sink").field("info", &self.info).finish()
-    }
-}
-
-/// Data shared between sink and the playback loop
-struct SharedData {
-    /// Used to control the playback loop from the [`Sink`]
-    controls: Mutex<Controls>,
-    /// The source for the audio
-    source: Mutex<Option<Box<dyn Source>>>,
-    /// Function used as callback from the playback loop on events
-    callback: Mutex<Option<Box<dyn FnMut(CallbackInfo) + Send>>>,
-    /// Function used as callback when errors occur on the playback loop
-    err_callback: Mutex<Option<Box<dyn FnMut(Error) + Send>>>,
-}
-
-/// Callback type and asociated information
-#[non_exhaustive]
-#[derive(Debug)]
-pub enum CallbackInfo {
-    /// Invoked when the current source has reached end
-    SourceEnded,
-    /// Invoked when no sound is playing and you can call hard_pause
-    PauseEnded,
-}
-
-/// Used to control the playback loop from the sink
-#[derive(Clone)]
-struct Controls {
-    /// Fade duration when play/pause
-    fade_duration: Duration,
-    /// When true, playback plays, when false playback is paused
-    play: bool,
-    /// Sets the volume of the playback
-    volume: f32,
-}
-
-/// Struct that handles the playback loop
-struct Mixer {
-    /// Data shared with [`Sink`]
-    shared: Arc<SharedData>,
-    /// Volume iterator presented to the source
-    volume: VolumeIterator,
-    /// The last status of play
-    last_play: Option<bool>,
-    last_sound: bool,
-    /// Info about the device that is playing
-    info: DeviceConfig,
 }
 
 impl Sink {
@@ -147,16 +93,7 @@ impl Sink {
             SampleFormat::U32 => arm!(u32, U32),
             SampleFormat::U64 => arm!(u64, U64),
             SampleFormat::F32 => arm!(f32, F32),
-            SampleFormat::F64 => device.build_output_stream(
-                &config,
-                move |d: &mut [f64], _| {
-                    mixer.mix(&mut SampleBufferMut::F64(d))
-                },
-                move |e| {
-                    _ = shared.invoke_err_callback(e.into());
-                },
-                None,
-            ),
+            SampleFormat::F64 => arm!(f64, F64),
             _ => {
                 // TODO: select other format when this is not supported
                 return Err(Error::UnsupportedSampleFormat);
@@ -403,6 +340,12 @@ impl Sink {
     pub fn get_preferred_buffer_size(&self) -> Option<u32> {
         self.preferred_buffer_size
     }
+
+    /// Gets info about the configuration of the output device that is
+    /// currently playing
+    pub fn get_info(&self) -> &DeviceConfig {
+        &self.info
+    }
 }
 
 impl Default for Sink {
@@ -417,226 +360,6 @@ impl Default for Sink {
             },
             preferred_buffer_size: None,
         }
-    }
-}
-
-impl Mixer {
-    /// Creates new [`Mixer`]
-    fn new(shared: Arc<SharedData>, info: DeviceConfig) -> Self {
-        Self {
-            shared,
-            volume: VolumeIterator::default(),
-            last_play: None,
-            last_sound: true,
-            info,
-        }
-    }
-
-    /// Writes the data from the source to the buffer `data`
-    fn mix<'a, 'b: 'a>(&mut self, data: &'a mut SampleBufferMut<'b>) {
-        if let Err(e) = self.try_mix(data) {
-            silence_sbuf!(data);
-            _ = self.shared.invoke_err_callback(e);
-        }
-    }
-
-    /// Tries to write the data from the source to the buffer `data`
-    fn try_mix<'a, 'b: 'a>(
-        &mut self,
-        data: &'a mut SampleBufferMut<'b>,
-    ) -> Result<()> {
-        let controls = { self.shared.controls()?.clone() };
-
-        let lp = self.last_play.unwrap_or(controls.play);
-        self.last_play = Some(controls.play);
-
-        self.volume.set_volume(controls.volume, lp);
-
-        if controls.play {
-            self.last_sound = true;
-
-            // Change the volume transition if the transition is to pause or
-            // if it was previously paused
-            if !lp {
-                if self.volume.until_target().is_none() {
-                    self.volume.set_volume(0., lp);
-                }
-
-                self.volume.to_linear_time_rate(
-                    controls.volume,
-                    self.info.sample_rate,
-                    controls.fade_duration,
-                    self.info.channel_count as usize,
-                );
-            }
-
-            self.play_source(data, controls)?;
-        } else {
-            // Change the volume transition if the transition is to play or
-            // if it was previously played
-            if lp {
-                self.volume.to_linear_time_rate(
-                    0.,
-                    self.info.sample_rate,
-                    controls.fade_duration,
-                    self.info.channel_count as usize,
-                );
-            }
-
-            let len = (self.volume.until_target().unwrap_or(0)
-                * self.info.channel_count as usize)
-                .min(data.len());
-
-            if len != 0 {
-                // play the silencing
-                self.play_source(&mut slice_sbuf!(data, 0..len), controls)?;
-                self.last_sound = true;
-            }
-
-            // than pause
-            let data_len = data.len();
-            silence_sbuf!(slice_sbuf!(data, len..data_len));
-
-            // TODO: Edge case
-            if data_len - len != 0 && self.last_sound {
-                if let Err(e) =
-                    self.shared.invoke_callback(CallbackInfo::PauseEnded)
-                {
-                    _ = self.shared.invoke_err_callback(e);
-                };
-                self.last_sound = false;
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Writes the data from the source to the buffer `data`
-    fn play_source(
-        &mut self,
-        data: &mut SampleBufferMut,
-        controls: Controls,
-    ) -> Result<()> {
-        let mut src = self.shared.source()?;
-
-        match src.as_mut() {
-            Some(s) => {
-                let supports_volume = s.volume(self.volume);
-
-                let (cnt, e) = s.read(data);
-
-                if let Err(e) = e {
-                    _ = self.shared.invoke_err_callback(e.into());
-                }
-
-                if supports_volume {
-                    self.volume.skip_vol(cnt);
-                }
-
-                operate_samples!(data, d, {
-                    // manually change the volume of each sample if the
-                    // source doesn't support volume
-                    if !supports_volume {
-                        if controls.volume != 1. {
-                            for s in d.iter_mut() {
-                                *s = (*s)
-                                    .mul_amp(self.volume.next_vol().into());
-                            }
-                        } else if controls.volume == 0. {
-                            write_silence(&mut d[..cnt]);
-                        }
-                    }
-
-                    write_silence(&mut d[cnt..]);
-                    if cnt < d.len() {
-                        *src = None;
-                        self.shared.invoke_callback(CallbackInfo::SourceEnded)
-                    } else {
-                        Ok(())
-                    }
-                })
-            }
-            None => {
-                silence_sbuf!(data);
-                Ok(())
-            }
-        }
-    }
-}
-
-impl SharedData {
-    /// Creates new shared data
-    fn new() -> Self {
-        Self {
-            controls: Mutex::new(Controls::new()),
-            source: Mutex::new(None),
-            callback: Mutex::new(None),
-            err_callback: Mutex::new(None),
-        }
-    }
-
-    /// Aquires lock on controls
-    fn controls(&self) -> Result<MutexGuard<'_, Controls>> {
-        Ok(self.controls.lock()?)
-    }
-
-    /// Aquires lock on source
-    fn source(&self) -> Result<MutexGuard<'_, Option<Box<dyn Source>>>> {
-        Ok(self.source.lock()?)
-    }
-
-    /// Aquires lock on callback function
-    fn callback(
-        &self,
-    ) -> Result<MutexGuard<'_, Option<Box<dyn FnMut(CallbackInfo) + Send>>>>
-    {
-        Ok(self.callback.lock()?)
-    }
-
-    /// Aquires lock on error callback function
-    fn err_callback(
-        &self,
-    ) -> Result<MutexGuard<'_, Option<Box<dyn FnMut(Error) + Send>>>> {
-        Ok(self.err_callback.lock()?)
-    }
-
-    /// Invokes callback function
-    fn invoke_callback(&self, args: CallbackInfo) -> Result<()> {
-        if let Some(cb) = self.callback()?.as_mut() {
-            cb(args)
-        }
-        Ok(())
-    }
-
-    /// Invokes error callback function
-    fn invoke_err_callback(&self, args: Error) -> Result<()> {
-        if let Some(cb) = self.err_callback()?.as_mut() {
-            cb(args)
-        }
-        Ok(())
-    }
-}
-
-impl Default for SharedData {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Controls {
-    /// Creates new controls
-    pub fn new() -> Self {
-        Self {
-            fade_duration: Duration::ZERO,
-            play: false,
-            volume: 1.,
-        }
-    }
-}
-
-impl Default for Controls {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -668,4 +391,10 @@ fn select_config(
     }
 
     selected.map(|s| s.with_sample_rate(SampleRate(prefered.sample_rate)))
+}
+
+impl std::fmt::Debug for Sink {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Sink").field("info", &self.info).finish()
+    }
 }

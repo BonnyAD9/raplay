@@ -1,6 +1,8 @@
 pub mod converters;
 pub mod err;
+mod mixer;
 pub mod sample_buffer;
+mod shared;
 pub mod sink;
 pub mod source;
 mod timestamp;
