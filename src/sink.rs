@@ -28,6 +28,12 @@ pub struct Sink {
     info: DeviceConfig,
 }
 
+impl std::fmt::Debug for Sink {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Sink").field("info", &self.info).finish()
+    }
+}
+
 /// Data shared between sink and the playback loop
 struct SharedData {
     /// Used to control the playback loop from the [`Sink`]
