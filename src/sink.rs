@@ -201,7 +201,7 @@ impl Sink {
     ///
     /// # Errors
     /// - another user of one of the used mutexes panicked while using it
-    /// - source fails to init
+    /// - source fails topreferred_config
     ///
     /// # Panics
     /// - the current thread already locked one of the used mutexes and didn't
@@ -211,7 +211,7 @@ impl Sink {
         mut src: impl Source + 'static,
         play: bool,
     ) -> Result<()> {
-        let config = src.preffered_config();
+        let config = src.preferred_config();
         if config.is_some() && *config.as_ref().unwrap() != self.info {
             _ = self.build_out_stream(config);
         }

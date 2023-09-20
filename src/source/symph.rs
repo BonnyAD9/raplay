@@ -116,7 +116,7 @@ impl Source for Symph {
         })
     }
 
-    fn preffered_config(&mut self) -> Option<DeviceConfig> {
+    fn preferred_config(&mut self) -> Option<DeviceConfig> {
         let mut dec = self.decoder.last_decoded();
         let mut spec = dec.spec();
 

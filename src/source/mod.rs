@@ -34,7 +34,7 @@ pub trait Source: Send {
     fn read(&mut self, buffer: &mut SampleBufferMut) -> (usize, Result<()>);
 
     /// Gets the preffered configuration.
-    fn preffered_config(&mut self) -> Option<DeviceConfig> {
+    fn preferred_config(&mut self) -> Option<DeviceConfig> {
         None
     }
 
