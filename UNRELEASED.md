@@ -5,6 +5,7 @@
 - Sink implements Debug
 - Get timestamp when seeking
 - Add option to seek by
+- Option to set buffer size
 
 ## Bugfixes
 - Fix typo in source trait function name

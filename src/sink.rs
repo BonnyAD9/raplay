@@ -5,8 +5,8 @@ use std::{
 
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
-    Sample, SampleFormat, SampleRate, Stream, SupportedOutputConfigs,
-    SupportedStreamConfig,
+    BufferSize, Sample, SampleFormat, SampleRate, Stream, SupportedBufferSize,
+    SupportedOutputConfigs, SupportedStreamConfig,
 };
 
 use crate::{
@@ -27,6 +27,7 @@ pub struct Sink {
     stream: Option<Stream>,
     /// Info about the current device configuration
     info: DeviceConfig,
+    preferred_buffer_size: Option<u32>,
 }
 
 impl std::fmt::Debug for Sink {
@@ -92,22 +93,34 @@ impl Sink {
         let device = cpal::default_host()
             .default_input_device()
             .ok_or(Error::NoOutDevice)?;
-        let config = match config {
+        let supported_config = match config {
             Some(c) => select_config(c, device.supported_output_configs()?)
                 .unwrap_or(device.default_output_config()?),
             None => device.default_output_config()?,
         };
 
         self.info = DeviceConfig {
-            channel_count: config.channels() as u32,
-            sample_rate: config.sample_rate().0,
-            sample_format: config.sample_format(),
+            channel_count: supported_config.channels() as u32,
+            sample_rate: supported_config.sample_rate().0,
+            sample_format: supported_config.sample_format(),
         };
 
         let shared = self.shared.clone();
         let mut mixer = Mixer::new(shared.clone(), self.info.clone());
 
-        let config = config.into();
+        let mut config = supported_config.config();
+        if let (
+            Some(size),
+            SupportedBufferSize::Range {
+                min: min_size,
+                max: max_size,
+            },
+        ) = (self.preferred_buffer_size, supported_config.buffer_size())
+        {
+            config.buffer_size =
+                BufferSize::Fixed(size.max(*min_size).min(*max_size))
+        }
+
         macro_rules! arm {
             ($t:ident, $e:ident) => {
                 device.build_output_stream(
@@ -134,7 +147,16 @@ impl Sink {
             SampleFormat::U32 => arm!(u32, U32),
             SampleFormat::U64 => arm!(u64, U64),
             SampleFormat::F32 => arm!(f32, F32),
-            SampleFormat::F64 => arm!(f64, F64),
+            SampleFormat::F64 => device.build_output_stream(
+                &config,
+                move |d: &mut [f64], _| {
+                    mixer.mix(&mut SampleBufferMut::F64(d))
+                },
+                move |e| {
+                    _ = shared.invoke_err_callback(e.into());
+                },
+                None,
+            ),
             _ => {
                 // TODO: select other format when this is not supported
                 return Err(Error::UnsupportedSampleFormat);
@@ -368,6 +390,19 @@ impl Sink {
         self.shared.controls()?.fade_duration = fade;
         Ok(())
     }
+
+    /// Sets the preferred buffer size. None means, use default size.
+    ///
+    /// Set to small values (such as 1024 or even less) for low latency.
+    /// Set to large values (such as 16384) for better performace efficiency.
+    pub fn set_buffer_size(&mut self, size: Option<u32>) {
+        self.preferred_buffer_size = size;
+    }
+
+    /// Gets the preferred buffer size set by you
+    pub fn get_preferred_buffer_size(&self) -> Option<u32> {
+        self.preferred_buffer_size
+    }
 }
 
 impl Default for Sink {
@@ -380,6 +415,7 @@ impl Default for Sink {
                 sample_rate: 0,
                 sample_format: SampleFormat::F32,
             },
+            preferred_buffer_size: None,
         }
     }
 }
