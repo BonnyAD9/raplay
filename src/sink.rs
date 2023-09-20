@@ -332,6 +332,19 @@ impl Sink {
             .seek(timestamp)?)
     }
 
+    pub fn seek_by(
+        &mut self,
+        time: Duration,
+        forward: bool,
+    ) -> Result<Timestamp> {
+        Ok(self
+            .shared
+            .source()?
+            .as_mut()
+            .ok_or(Error::NoSourceIsPlaying)?
+            .seek_by(time, forward)?)
+    }
+
     /// Gets the current timestamp and the total length of the currently
     /// playing source.
     ///

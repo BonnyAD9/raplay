@@ -26,7 +26,7 @@ mod tests {
         )?, &Default::default())?;
         sink.on_callback(Some(|c| println!("callback: {c:?}")))?;
         sink.on_err_callback(Some(|e: Error| println!("{}", e)))?;
-        sink.volume(0.2)?;
+        sink.volume(1.)?;
         sink.load(src, true)?;
         sink.set_fade_len(Duration::from_millis(200))?;
         //thread::sleep(Duration::from_secs(5));
@@ -34,8 +34,9 @@ mod tests {
             let mut s = String::new();
             _ = stdin().read_line(&mut s);
             sink.play(!sink.is_playing()?)?;
+            sink.seek_by(Duration::from_secs(10), true)?;
             let ts = sink.get_timestamp()?;
-            println!("{:?}/{:?}", ts.0, ts.1);
+            println!("{:?}/{:?}", ts.current, ts.total);
         }
     }*/
 

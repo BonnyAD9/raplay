@@ -20,7 +20,8 @@ pub use symphonia::core::formats::FormatOptions;
 use crate::{
     converters::{do_channels_rate, interleave, UniSample},
     err, operate_samples,
-    sample_buffer::SampleBufferMut, Timestamp,
+    sample_buffer::SampleBufferMut,
+    Timestamp,
 };
 
 use super::{DeviceConfig, Source, VolumeIterator};
@@ -162,7 +163,8 @@ impl Source for Symph {
         )?;
         self.buffer_start = None;
         self.last_ts = pos.actual_ts;
-        self.get_time().ok_or(err::Error::CannotDetermineTimestamp.into())
+        self.get_time()
+            .ok_or(err::Error::CannotDetermineTimestamp.into())
     }
 
     fn get_time(&self) -> Option<Timestamp> {

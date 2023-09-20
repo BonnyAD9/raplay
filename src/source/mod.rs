@@ -62,6 +62,24 @@ pub trait Source: Send {
         .into())
     }
 
+    /// Seeks in the given direction. If `forward` is `true`, seeks forward,
+    /// otherwise seeks back
+    fn seek_by(&mut self, time: Duration, forward: bool) -> Result<Timestamp> {
+        if let Some(t) = self.get_time() {
+            if forward {
+                self.seek(t.current + time)
+            } else {
+                self.seek(t.current.checked_sub(time).unwrap_or_default())
+            }
+        } else {
+            Err(Error::Unsupported {
+                component: "Source",
+                feature: "seeking by",
+            }
+            .into())
+        }
+    }
+
     /// Gets the current time and whole length
     ///
     /// # Returns
