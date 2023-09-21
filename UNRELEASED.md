@@ -7,6 +7,7 @@
 - Add option to seek by
 - Option to set buffer size
 - Option to get device info
+- Option to select output device
 
 ## Bugfixes
 - Fix typo in source trait function name

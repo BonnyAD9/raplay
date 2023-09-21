@@ -2,8 +2,8 @@ use std::{sync::Arc, time::Duration};
 
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
-    SampleFormat, SampleRate, Stream, SupportedOutputConfigs,
-    SupportedStreamConfig,
+    Device, SampleFormat, SampleRate, Stream, SupportedOutputConfigs,
+    SupportedStreamConfig, Devices,
 };
 
 use crate::{
@@ -24,6 +24,8 @@ pub struct Sink {
     stream: Option<Stream>,
     /// Info about the current device configuration
     info: DeviceConfig,
+    /// Prefered device set by the user
+    device: Option<Device>,
     /// Sink will try to get the buffer size to be this
     preferred_buffer_size: BufferSize,
 }
@@ -36,11 +38,25 @@ impl Sink {
         &mut self,
         config: Option<DeviceConfig>,
     ) -> Result<()> {
-        let device = cpal::default_host()
-            .default_input_device()
-            .ok_or(Error::NoOutDevice)?;
+        let mut device = self.device.take().map(|d| Ok(d)).unwrap_or_else(
+            || -> Result<_> {
+                Ok(cpal::default_host()
+                    .default_input_device()
+                    .ok_or(Error::NoOutDevice)?)
+            },
+        )?;
+
+        let sup = if let Ok(c) = device.supported_output_configs() {
+            c
+        } else {
+            device = cpal::default_host()
+                        .default_input_device()
+                        .ok_or(Error::NoOutDevice)?;
+            device.supported_output_configs()?
+        };
+
         let supported_config = match config {
-            Some(c) => select_config(c, device.supported_output_configs()?)
+            Some(c) => select_config(c, sup)
                 .unwrap_or(device.default_output_config()?),
             None => device.default_output_config()?,
         };
@@ -91,6 +107,8 @@ impl Sink {
                 return Err(Error::UnsupportedSampleFormat);
             }
         }?;
+
+        self.device = Some(device);
 
         stream.play()?;
 
@@ -338,6 +356,14 @@ impl Sink {
     pub fn get_info(&self) -> &DeviceConfig {
         &self.info
     }
+
+    pub fn list_devices() -> Result<Devices> {
+        Ok(cpal::default_host().devices()?)
+    }
+
+    pub fn set_device(&mut self, device: Option<Device>) {
+        self.device = device;
+    }
 }
 
 impl Default for Sink {
@@ -350,6 +376,7 @@ impl Default for Sink {
                 sample_rate: 0,
                 sample_format: SampleFormat::F32,
             },
+            device: None,
             preferred_buffer_size: BufferSize::Auto,
         }
     }

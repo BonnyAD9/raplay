@@ -17,20 +17,23 @@ pub use self::{
 mod tests {
     /*use std::{fs::File, io::stdin, time::Duration};
 
-    use crate::{err::Error, source::Symph, Sink};
+    use crate::{err::Error, source::Symph, Sink, BufferSize};
 
     use anyhow::Result;
+    use cpal::traits::DeviceTrait;
 
     #[test]
     fn play_audio() -> Result<()> {
         let mut sink = Sink::default();
         let src = Symph::try_new(File::open(
-            "/mnt/x/Music/AJR - Neotheater - 01 Next Up Forever.flac",
+            "/mnt/x/Files/Music/AJR - Neotheater - 01 Next Up Forever.flac",
         )?, &Default::default())?;
         sink.on_callback(Some(|c| println!("callback: {c:?}")))?;
         sink.on_err_callback(Some(|e: Error| println!("{}", e)))?;
         sink.volume(0.2)?;
-        sink.set_buffer_size(Some(1024));
+        for i in Sink::list_devices()? {
+            println!("{}", i.name()?);
+        }
         sink.load(src, true)?;
         sink.set_fade_len(Duration::from_millis(200))?;
         //thread::sleep(Duration::from_secs(5));

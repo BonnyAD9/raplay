@@ -82,4 +82,5 @@ impl_cpal!(
     PlayStream -> cpal::PlayStreamError,
     SupportedConfigs -> cpal::SupportedStreamConfigsError,
     PauseStreamError -> cpal::PauseStreamError,
+    DevicesError -> cpal::DevicesError,
 );
