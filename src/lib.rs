@@ -1,3 +1,4 @@
+mod buffer_size;
 pub mod converters;
 pub mod err;
 mod mixer;
@@ -8,9 +9,9 @@ pub mod source;
 mod timestamp;
 
 ///! Library for playing audio
-pub use err::Error;
-pub use sink::Sink;
-pub use timestamp::Timestamp;
+pub use self::{
+    buffer_size::BufferSize, err::Error, sink::Sink, timestamp::Timestamp,
+};
 
 #[cfg(test)]
 mod tests {

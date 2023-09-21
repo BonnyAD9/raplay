@@ -2,8 +2,8 @@ use std::{sync::Arc, time::Duration};
 
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
-    BufferSize, SampleFormat, SampleRate, Stream, SupportedBufferSize,
-    SupportedOutputConfigs, SupportedStreamConfig,
+    SampleFormat, SampleRate, Stream, SupportedOutputConfigs,
+    SupportedStreamConfig,
 };
 
 use crate::{
@@ -12,7 +12,7 @@ use crate::{
     sample_buffer::SampleBufferMut,
     shared::{CallbackInfo, SharedData},
     source::{DeviceConfig, Source},
-    Timestamp,
+    BufferSize, Timestamp,
 };
 
 /// A player that can play `Source`
@@ -25,7 +25,7 @@ pub struct Sink {
     /// Info about the current device configuration
     info: DeviceConfig,
     /// Sink will try to get the buffer size to be this
-    preferred_buffer_size: Option<u32>,
+    preferred_buffer_size: BufferSize,
 }
 
 impl Sink {
@@ -55,17 +55,9 @@ impl Sink {
         let mut mixer = Mixer::new(shared.clone(), self.info.clone());
 
         let mut config = supported_config.config();
-        if let (
-            Some(size),
-            SupportedBufferSize::Range {
-                min: min_size,
-                max: max_size,
-            },
-        ) = (self.preferred_buffer_size, supported_config.buffer_size())
-        {
-            config.buffer_size =
-                BufferSize::Fixed(size.max(*min_size).min(*max_size))
-        }
+        config.buffer_size = self
+            .preferred_buffer_size
+            .to_cpal(supported_config.buffer_size(), config.sample_rate.0);
 
         macro_rules! arm {
             ($t:ident, $e:ident) => {
@@ -332,12 +324,12 @@ impl Sink {
     ///
     /// Set to small values (such as 1024 or even less) for low latency.
     /// Set to large values (such as 16384) for better performace efficiency.
-    pub fn set_buffer_size(&mut self, size: Option<u32>) {
+    pub fn set_buffer_size(&mut self, size: BufferSize) {
         self.preferred_buffer_size = size;
     }
 
     /// Gets the preferred buffer size set by you
-    pub fn get_preferred_buffer_size(&self) -> Option<u32> {
+    pub fn get_preferred_buffer_size(&self) -> BufferSize {
         self.preferred_buffer_size
     }
 
@@ -358,7 +350,7 @@ impl Default for Sink {
                 sample_rate: 0,
                 sample_format: SampleFormat::F32,
             },
-            preferred_buffer_size: None,
+            preferred_buffer_size: BufferSize::Auto,
         }
     }
 }
