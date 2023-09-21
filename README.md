@@ -35,15 +35,12 @@ use raplay::{Sink, source::Symph};
 
 let sink = Sink::default(); // get the default output
 let file = File::open("music.mp3")?; // open the mp3 file
-let src = Symph::try_new(file)?; // create a symphonia decoder source
+let src = Symph::try_new(file, &Default::default())?; // create a symphonia decoder source
 sink.load(src, true)?; // play the mp3 file
 ```
 
 ## Known issues
-- The sound is not clear when playing high sample rates relative to what
-is set by the device (192000Hz/41000Hz)
-    - this has now been fixed with a workaround and should not be problem
-      on most devices
+- If the device doesn't support the required sample rate, aliasing may occur
 
 ## How to get it
 It is available on [crates.io](https://crates.io/crates/raplay)

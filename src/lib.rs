@@ -26,7 +26,7 @@ mod tests {
     fn play_audio() -> Result<()> {
         let mut sink = Sink::default();
         let src = Symph::try_new(File::open(
-            "/mnt/x/Files/Music/AJR - Neotheater - 01 Next Up Forever.flac",
+            "/mnt/x/Music/AJR - Neotheater - 01 Next Up Forever.flac",
         )?, &Default::default())?;
         sink.on_callback(Some(|c| println!("callback: {c:?}")))?;
         sink.on_err_callback(Some(|e: Error| println!("{}", e)))?;
