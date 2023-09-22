@@ -16,5 +16,6 @@ categories = ["multimedia::audio"]
 anyhow = "1.0.75"
 cpal = "0.15.2"
 num = "0.4.1"
+serde = {version = "1.0.188", features = [ "std", "derive" ]}
 symphonia = { version = "0.5.3", features = ["all"] }
 thiserror = "1.0.47"

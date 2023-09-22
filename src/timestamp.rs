@@ -1,6 +1,8 @@
 use std::time::Duration;
 
-#[derive(Debug, Clone, Copy)]
+use serde::{Serialize, Deserialize};
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Timestamp {
     pub current: Duration,
     pub total: Duration,
