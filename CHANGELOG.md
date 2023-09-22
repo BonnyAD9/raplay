@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.4
+### Bugfixes
+- PauseEnds was called after load
+
 ## v0.3.3
 ### Bugfixes
 - Make hard pause callback return time

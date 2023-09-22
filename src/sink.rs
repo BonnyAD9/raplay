@@ -113,8 +113,6 @@ impl Sink {
 
         self.device = Some(device);
 
-        stream.play()?;
-
         self.stream = Some(stream);
 
         Ok(())
@@ -196,6 +194,12 @@ impl Sink {
         controls.play = play;
         *source = Some(Box::new(src));
 
+        if let Some(s) = &self.stream {
+            if play {
+                s.play()?;
+            }
+        }
+
         Ok(())
     }
 
@@ -216,6 +220,10 @@ impl Sink {
         Ok(())
     }
 
+    /// Pauses the loop that is feeding new samples. This can be used to reduce
+    /// cpu usage, but it is very different from the normal pause.
+    ///
+    /// It doesn't ignores fade play/pause.
     pub fn hard_pause(&self) -> Result<()> {
         if let Some(s) = &self.stream {
             s.pause()?;
@@ -304,6 +312,8 @@ impl Sink {
             .seek(timestamp)?)
     }
 
+    /// Seeks by the given amount. If `forward` is true, seeks forward,
+    /// otherwise seeks backward
     pub fn seek_by(
         &mut self,
         time: Duration,
@@ -360,10 +370,12 @@ impl Sink {
         &self.info
     }
 
+    /// Gets iterator over all available devices
     pub fn list_devices() -> Result<Devices> {
         Ok(cpal::default_host().devices()?)
     }
 
+    /// Sets the device to be used
     pub fn set_device(&mut self, device: Option<Device>) {
         self.device = device;
     }

@@ -31,7 +31,7 @@ impl Mixer {
             shared,
             volume: VolumeIterator::default(),
             last_play: None,
-            last_sound: true,
+            last_sound: false,
             info,
         }
     }
