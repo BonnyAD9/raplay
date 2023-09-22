@@ -1,7 +1,10 @@
 # Changelog
 
-## v0.3.1
+## v0.3.2
+### Bugfixes
+- Proper visibility
 
+## v0.3.1
 ### New features
 - Add serialize and deserialize to timestamp
 
