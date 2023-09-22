@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.3
+### Bugfixes
+- Make hard pause callback return time
+
 ## v0.3.2
 ### Bugfixes
 - Proper visibility

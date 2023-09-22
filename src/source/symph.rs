@@ -151,16 +151,29 @@ impl Source for Symph {
     }
 
     fn seek(&mut self, time: Duration) -> anyhow::Result<Timestamp> {
-        let pos = self.probed.format.seek(
-            SeekMode::Coarse,
+        let par = self.decoder.codec_params();
+        let time = Time::new(
+            time.as_secs(),
+            time.as_secs_f64() - time.as_secs_f64().trunc(),
+        );
+
+        let seek_to = if let (Some(time_base), Some(max)) =
+            (par.time_base, par.n_frames)
+        {
+            let ts = time_base.calc_timestamp(time);
+            SeekTo::TimeStamp {
+                ts: ts.min(max - 1),
+                track_id: self.track_id,
+            }
+        } else {
             SeekTo::Time {
-                time: Time::new(
-                    time.as_secs(),
-                    time.as_secs_f64() - time.as_secs_f64().trunc(),
-                ),
+                time,
                 track_id: Some(self.track_id),
-            },
-        )?;
+            }
+        };
+
+        let pos = self.probed.format.seek(SeekMode::Coarse, seek_to)?;
+
         self.buffer_start = None;
         self.last_ts = pos.actual_ts;
         self.get_time()

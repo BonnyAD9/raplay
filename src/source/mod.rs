@@ -69,7 +69,12 @@ pub trait Source: Send {
             if forward {
                 self.seek(t.current + time)
             } else {
-                self.seek(t.current.checked_sub(time).unwrap_or_default())
+                self.seek(
+                    t.current
+                        .checked_sub(time)
+                        .unwrap_or_default()
+                        .min(t.total),
+                )
             }
         } else {
             Err(Error::Unsupported {

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 
 use cpal::Sample;
 
@@ -40,8 +40,9 @@ impl Mixer {
     pub(super) fn mix<'a, 'b: 'a>(
         &mut self,
         data: &'a mut SampleBufferMut<'b>,
+        play_time: Instant,
     ) {
-        if let Err(e) = self.try_mix(data) {
+        if let Err(e) = self.try_mix(data, play_time) {
             silence_sbuf!(data);
             _ = self.shared.invoke_err_callback(e);
         }
@@ -51,6 +52,7 @@ impl Mixer {
     fn try_mix<'a, 'b: 'a>(
         &mut self,
         data: &'a mut SampleBufferMut<'b>,
+        play_time: Instant,
     ) -> Result<()> {
         let controls = { self.shared.controls()?.clone() };
 
@@ -104,10 +106,10 @@ impl Mixer {
             let data_len = data.len();
             silence_sbuf!(slice_sbuf!(data, len..data_len));
 
-            // TODO: Edge case
-            if data_len - len != 0 && self.last_sound {
-                if let Err(e) =
-                    self.shared.invoke_callback(CallbackInfo::PauseEnded)
+            if len == 0 && self.last_sound {
+                if let Err(e) = self
+                    .shared
+                    .invoke_callback(CallbackInfo::PauseEnds(play_time))
                 {
                     _ = self.shared.invoke_err_callback(e);
                 };

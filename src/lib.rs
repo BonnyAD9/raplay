@@ -10,7 +10,7 @@ mod timestamp;
 
 ///! Library for playing audio
 pub use self::{
-    buffer_size::*, err::Error, sink::Sink, timestamp::*, shared::*
+    buffer_size::*, err::Error, shared::*, sink::Sink, timestamp::*,
 };
 
 #[cfg(test)]

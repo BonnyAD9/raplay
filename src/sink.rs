@@ -1,9 +1,12 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
-    Device, SampleFormat, SampleRate, Stream, SupportedOutputConfigs,
-    SupportedStreamConfig, Devices,
+    Device, Devices, OutputCallbackInfo, SampleFormat, SampleRate, Stream,
+    SupportedOutputConfigs, SupportedStreamConfig,
 };
 
 use crate::{
@@ -50,8 +53,8 @@ impl Sink {
             c
         } else {
             device = cpal::default_host()
-                        .default_input_device()
-                        .ok_or(Error::NoOutDevice)?;
+                .default_input_device()
+                .ok_or(Error::NoOutDevice)?;
             device.supported_output_configs()?
         };
 
@@ -79,8 +82,8 @@ impl Sink {
             ($t:ident, $e:ident) => {
                 device.build_output_stream(
                     &config,
-                    move |d: &mut [$t], _| {
-                        mixer.mix(&mut SampleBufferMut::$e(d))
+                    move |d: &mut [$t], info| {
+                        mixer.mix(&mut SampleBufferMut::$e(d), get_play_time(info))
                     },
                     move |e| {
                         _ = shared.invoke_err_callback(e.into());
@@ -416,4 +419,13 @@ impl std::fmt::Debug for Sink {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Sink").field("info", &self.info).finish()
     }
+}
+
+fn get_play_time(info: &OutputCallbackInfo) -> Instant {
+    let now = Instant::now();
+    now + info
+        .timestamp()
+        .playback
+        .duration_since(&info.timestamp().callback)
+        .unwrap_or_default()
 }

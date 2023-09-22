@@ -1,6 +1,6 @@
 use std::{
     sync::{Mutex, MutexGuard},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use crate::{err::Result, source::Source, Error};
@@ -35,7 +35,7 @@ pub enum CallbackInfo {
     /// Invoked when the current source has reached end
     SourceEnded,
     /// Invoked when no sound is playing and you can call hard_pause
-    PauseEnded,
+    PauseEnds(Instant),
 }
 
 impl SharedData {
