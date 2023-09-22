@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.3.1
+
+### New features
+- Add serialize and deserialize to timestamp
+
 ## v0.3.0
 ### New features
 - Message when pause ends
