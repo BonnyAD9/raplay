@@ -44,7 +44,7 @@ impl Sink {
         let mut device = self.device.take().map(|d| Ok(d)).unwrap_or_else(
             || -> Result<_> {
                 Ok(cpal::default_host()
-                    .default_input_device()
+                    .default_output_device()
                     .ok_or(Error::NoOutDevice)?)
             },
         )?;
@@ -53,7 +53,7 @@ impl Sink {
             c
         } else {
             device = cpal::default_host()
-                .default_input_device()
+                .default_output_device()
                 .ok_or(Error::NoOutDevice)?;
             device.supported_output_configs()?
         };
@@ -83,7 +83,10 @@ impl Sink {
                 device.build_output_stream(
                     &config,
                     move |d: &mut [$t], info| {
-                        mixer.mix(&mut SampleBufferMut::$e(d), get_play_time(info))
+                        mixer.mix(
+                            &mut SampleBufferMut::$e(d),
+                            get_play_time(info),
+                        )
                     },
                     move |e| {
                         _ = shared.invoke_err_callback(e.into());
