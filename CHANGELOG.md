@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.5
+### API Changes
+- Make serde an optional, default feature
+
 ## v0.3.4
 ### Bugfixes
 - PauseEnds was called after load

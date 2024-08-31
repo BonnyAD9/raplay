@@ -1,6 +1,6 @@
 [package]
 name = "raplay"
-version = "0.3.4"
+version = "0.3.5"
 edition = "2021"
 license = "GPL-3.0"
 description = "Library for playing audio"
@@ -16,6 +16,9 @@ categories = ["multimedia::audio"]
 anyhow = "1.0.75"
 cpal = "0.15.2"
 num = "0.4.1"
-serde = {version = "1.0.188", features = [ "std", "derive" ]}
+serde = { version = "1.0.188", features = ["std", "derive"], optional = true }
 symphonia = { version = "0.5.3", features = ["all"] }
 thiserror = "1.0.47"
+
+[features]
+default = ["serde"]
