@@ -24,7 +24,7 @@
 //! ```
 //!
 //! ## Known issues
-//! - If the output device doesn't supporte the required sample rate, aliasing
+//! - If the output device doesn't support the required sample rate, aliasing
 //!   may occur.
 
 pub mod callback;
