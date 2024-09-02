@@ -4,6 +4,9 @@
 ### API Changes
 - Make serde an optional, default feature
 
+### Bugfixes
+- Input devices were selected instead of output devices
+
 ## v0.3.4
 ### Bugfixes
 - PauseEnds was called after load
