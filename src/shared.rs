@@ -3,7 +3,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::{err::Result, source::Source, Error};
+use crate::{callback::Callback, err::Result, source::Source, Error};
 
 /// Data shared between sink and the playback loop
 pub(super) struct SharedData {
@@ -12,9 +12,9 @@ pub(super) struct SharedData {
     /// The source for the audio
     source: Mutex<Option<Box<dyn Source>>>,
     /// Function used as callback from the playback loop on events
-    callback: Mutex<Option<Box<dyn FnMut(CallbackInfo) + Send>>>,
+    callback: Callback<CallbackInfo>,
     /// Function used as callback when errors occur on the playback loop
-    err_callback: Mutex<Option<Box<dyn FnMut(Error) + Send>>>,
+    err_callback: Callback<Error>,
 }
 
 /// Used to control the playback loop from the sink
@@ -44,8 +44,8 @@ impl SharedData {
         Self {
             controls: Mutex::new(Controls::new()),
             source: Mutex::new(None),
-            callback: Mutex::new(None),
-            err_callback: Mutex::new(None),
+            callback: Callback::default(),
+            err_callback: Callback::default(),
         }
     }
 
@@ -61,35 +61,24 @@ impl SharedData {
         Ok(self.source.lock()?)
     }
 
-    /// Aquires lock on callback function
-    pub(super) fn callback(
-        &self,
-    ) -> Result<MutexGuard<'_, Option<Box<dyn FnMut(CallbackInfo) + Send>>>>
-    {
-        Ok(self.callback.lock()?)
-    }
-
-    /// Aquires lock on error callback function
-    pub(super) fn err_callback(
-        &self,
-    ) -> Result<MutexGuard<'_, Option<Box<dyn FnMut(Error) + Send>>>> {
-        Ok(self.err_callback.lock()?)
-    }
-
     /// Invokes callback function
     pub(super) fn invoke_callback(&self, args: CallbackInfo) -> Result<()> {
-        if let Some(cb) = self.callback()?.as_mut() {
-            cb(args)
-        }
-        Ok(())
+        self.callback.invoke(args)
     }
 
     /// Invokes error callback function
     pub(super) fn invoke_err_callback(&self, args: Error) -> Result<()> {
-        if let Some(cb) = self.err_callback()?.as_mut() {
-            cb(args)
-        }
-        Ok(())
+        self.err_callback.invoke(args)
+    }
+
+    /// Gets the callback function
+    pub(super) fn callback(&self) -> &Callback<CallbackInfo> {
+        &self.callback
+    }
+
+    /// Gets the error callback function
+    pub(super) fn err_callback(&self) -> &Callback<Error> {
+        &self.err_callback
     }
 }
 

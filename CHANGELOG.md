@@ -3,8 +3,11 @@
 ## v0.3.5
 ### API Changes
 - Make serde an optional, default feature
+- Sources can now invoke error callback when they encounter recoverable
+  errors.
 
 ### Bugfixes
+- `Symph` source will try to recover from recoverable errors.
 - Input devices were selected instead of output devices
 
 ## v0.3.4

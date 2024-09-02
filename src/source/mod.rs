@@ -3,7 +3,9 @@ use std::time::Duration;
 use anyhow::Result;
 use cpal::SampleFormat;
 
-use crate::{sample_buffer::SampleBufferMut, Error, Timestamp};
+use crate::{
+    callback::Callback, sample_buffer::SampleBufferMut, Error, Timestamp,
+};
 
 pub mod sine;
 pub mod symph;
@@ -24,6 +26,12 @@ pub struct DeviceConfig {
 
 /// Source of audio samples
 pub trait Source: Send {
+    /// Set the error callback. The callback should be used when source
+    /// encounters recoverable error.
+    fn set_err_callback(&mut self, err_callback: &Callback<Error>) {
+        _ = err_callback;
+    }
+
     /// Delivers configuration to the source, read is not called before init
     ///
     /// Init may be called multiple times to update the info

@@ -18,6 +18,7 @@ use thiserror::Error;
 pub use symphonia::core::formats::FormatOptions;
 
 use crate::{
+    callback::Callback,
     converters::{do_channels_rate, interleave, UniSample},
     err, operate_samples,
     sample_buffer::SampleBufferMut,
@@ -48,6 +49,8 @@ pub struct Symph {
     volume: VolumeIterator,
     /// The timestamp of the last frame
     last_ts: u64,
+    /// Error callback for recoverable errors.
+    err_callback: Callback<err::Error>,
 }
 
 impl Symph {
@@ -95,11 +98,16 @@ impl Symph {
             buffer_start: None,
             volume: VolumeIterator::constant(1.),
             last_ts: 0,
+            err_callback: Callback::default(),
         })
     }
 }
 
 impl Source for Symph {
+    fn set_err_callback(&mut self, err_callback: &Callback<err::Error>) {
+        self.err_callback = err_callback.clone();
+    }
+
     fn init(&mut self, info: &DeviceConfig) -> anyhow::Result<()> {
         self.target_sample_rate = info.sample_rate;
         self.target_channels = info.channel_count;
@@ -239,29 +247,42 @@ impl Symph {
 
     /// Decodes the next packet
     fn decode_packet(&mut self) -> Result<(), Error> {
-        let packet = loop {
-            match self.probed.format.next_packet() {
-                Ok(p) => {
-                    if p.track_id() != self.track_id {
-                        continue;
+        loop {
+            let packet = loop {
+                match self.probed.format.next_packet() {
+                    Ok(p) => {
+                        if p.track_id() != self.track_id {
+                            continue;
+                        }
+                        self.last_ts = p.ts;
+                        break p;
                     }
-                    self.last_ts = p.ts;
-                    break p;
+                    Err(symphonia::core::errors::Error::ResetRequired) => {
+                        self.decoder.reset()
+                    }
+                    Err(e) => return Err(e.into()),
                 }
-                Err(symphonia::core::errors::Error::ResetRequired) => {
-                    self.decoder.reset()
-                }
-                Err(e) => return Err(e.into()),
-            }
-        };
+            };
 
-        match self.decoder.decode(&packet) {
-            Ok(d) => {
-                self.source_sample_rate = d.spec().rate;
-                self.source_channels = d.spec().channels.count() as u32;
-                Ok(())
-            }
-            Err(e) => Err(e.into()),
+            break match self.decoder.decode(&packet) {
+                Ok(d) => {
+                    self.source_sample_rate = d.spec().rate;
+                    self.source_channels = d.spec().channels.count() as u32;
+                    Ok(())
+                }
+                // Try to recover from recoverable errors.
+                Err(symphonia::core::errors::Error::ResetRequired) => continue,
+                Err(
+                    e @ (symphonia::core::errors::Error::DecodeError(_)
+                    | symphonia::core::errors::Error::IoError(_)),
+                ) => {
+                    _ = self
+                        .err_callback
+                        .invoke(Error::SymphRecoverable(e).into());
+                    continue;
+                }
+                Err(e) => Err(e.into()),
+            };
         }
     }
 
@@ -333,7 +354,6 @@ impl Symph {
             AudioBufferRef::S32(src) => arm!(s, *s, src),
             AudioBufferRef::F32(src) => arm!(s, *s, src),
             AudioBufferRef::F64(src) => arm!(s, *s, src),
-            //AudioBufferRef::S32(src) => arm!(s, *s, src),
         }
 
         i
@@ -351,6 +371,9 @@ pub enum Error {
     /// Cannot select track to decode
     #[error("Failed to select a track")]
     CantSelectTrack,
+    /// Recoverable error from symphonia
+    #[error("Recoverable symphonia error: {0}")]
+    SymphRecoverable(symphonia::core::errors::Error),
     /// Error from symphonia
     #[error(transparent)]
     SymphInner(#[from] symphonia::core::errors::Error),

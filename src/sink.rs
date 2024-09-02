@@ -138,11 +138,11 @@ impl Sink {
         &self,
         callback: Option<impl FnMut(CallbackInfo) + Send + 'static>,
     ) -> Result<()> {
-        (*self.shared.callback()?) = match callback {
-            Some(c) => Some(Box::new(c)),
-            None => None,
-        };
-        Ok(())
+        self.shared.callback().set(
+            callback.map(|c| -> Box<dyn FnMut(CallbackInfo) + Send> {
+                Box::new(c)
+            }),
+        )
     }
 
     /// Sets the error callback method.
@@ -162,11 +162,9 @@ impl Sink {
         &self,
         callback: Option<impl FnMut(Error) + Send + 'static>,
     ) -> Result<()> {
-        (*self.shared.err_callback()?) = match callback {
-            Some(c) => Some(Box::new(c)),
-            None => None,
-        };
-        Ok(())
+        self.shared.err_callback().set(
+            callback.map(|c| -> Box<dyn FnMut(Error) + Send> { Box::new(c) }),
+        )
     }
 
     /// Discards the old source and sets the new source. Starts playing if
@@ -184,9 +182,13 @@ impl Sink {
         mut src: impl Source + 'static,
         play: bool,
     ) -> Result<()> {
+        src.set_err_callback(self.shared.err_callback());
+
         let config = src.preferred_config();
-        if config.is_some() && *config.as_ref().unwrap() != self.info {
-            _ = self.build_out_stream(config);
+        if self.device.is_none()
+            || config.as_ref().map(|c| *c != self.info).unwrap_or_default()
+        {
+            self.build_out_stream(config)?;
         }
 
         let mut controls = self.shared.controls()?;
