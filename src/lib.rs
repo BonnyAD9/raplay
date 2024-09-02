@@ -1,15 +1,46 @@
-mod buffer_size;
+//! # raplay
+//! Library for playing audio
+//!
+//! ## Examples
+//! ### Play a sine wave
+//! ```rust,ignore
+//! use raplay::{Sink, source::SineSource}
+//!
+//! let sink = Sink::default(); // Get the default output
+//! let src = SineSource::new(1000.); // Create 1000Hz sine source
+//! sink.load(src, true)?; // Play the sine wave
+//! ```
+//!
+//! ### Play a mp3 file
+//! ```rust,ignore
+//! use std::fs::File;
+//! use raplay::{Sink, source::Symph}
+//!
+//! let sink = Sink::default(); // Get the default output
+//! let file = File::open("music.mp3")?; // Open the mp3 file
+//! let src = Symph::try_new(file, &Default::default())?; // Create a symphonia
+//!                                                       // decoder source
+//! sink.load(src, true); // Play the mp3 file
+//! ```
+//!
+//! ## Known issues
+//! - If the output device doesn't supporte the required sample rate, aliasing
+//!   may occur.
+
 pub mod callback;
+/// Useful conversions on samples.
 pub mod converters;
 pub mod err;
-mod mixer;
 pub mod sample_buffer;
-mod shared;
 pub mod sink;
+/// Audio sources that can be played in [`Sink`].
 pub mod source;
+
+mod buffer_size;
+mod mixer;
+mod shared;
 mod timestamp;
 
-///! Library for playing audio
 pub use self::{
     buffer_size::*, err::Error, shared::*, sink::Sink, timestamp::*,
 };

@@ -5,8 +5,11 @@ use std::{
 
 use crate::err::Result;
 
+type ArcMutex<T> = Arc<Mutex<T>>;
+type OptionBox<T> = Option<Box<T>>;
+
 /// Mutexed callback function.
-pub struct Callback<T>(Arc<Mutex<Option<Box<dyn FnMut(T) + Send>>>>);
+pub struct Callback<T>(ArcMutex<OptionBox<dyn FnMut(T) + Send>>);
 
 impl<T> Callback<T> {
     /// Create new callback function

@@ -147,6 +147,7 @@ impl Mixer {
                     // source doesn't support volume
                     if !supports_volume {
                         if controls.volume != 1. {
+                            #[allow(clippy::useless_conversion)]
                             for s in d.iter_mut() {
                                 *s = (*s)
                                     .mul_amp(self.volume.next_vol().into());

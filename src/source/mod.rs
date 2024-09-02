@@ -244,7 +244,7 @@ impl VolumeIterator {
                 cur_count,
                 target_count,
                 ..
-            } => Some((target_count - cur_count).abs() as usize),
+            } => Some((target_count - cur_count).unsigned_abs() as usize),
         }
     }
 

@@ -41,13 +41,12 @@ impl Sink {
         &mut self,
         config: Option<DeviceConfig>,
     ) -> Result<()> {
-        let mut device = self.device.take().map(|d| Ok(d)).unwrap_or_else(
-            || -> Result<_> {
-                Ok(cpal::default_host()
+        let mut device =
+            self.device.take().map(Ok).unwrap_or_else(|| -> Result<_> {
+                cpal::default_host()
                     .default_output_device()
-                    .ok_or(Error::NoOutDevice)?)
-            },
-        )?;
+                    .ok_or(Error::NoOutDevice)
+            })?;
 
         let sup = if let Ok(c) = device.supported_output_configs() {
             c

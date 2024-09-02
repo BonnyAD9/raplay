@@ -89,6 +89,11 @@ impl<'a> SampleBufferMut<'a> {
     pub fn len(&self) -> usize {
         operate_samples!(self, b, b.len())
     }
+
+    /// Checks if the buffer is empty
+    pub fn is_empty(&self) -> bool {
+        operate_samples!(self, b, b.is_empty())
+    }
 }
 
 /// Writes silence to the buffer

@@ -2,7 +2,7 @@ use thiserror::Error;
 
 use crate::source::symph;
 
-/// Result with this crate error type [`Error`]
+/// Result with this crate error type [`enum@Error`]
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Error type of this crate

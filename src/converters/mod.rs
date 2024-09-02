@@ -5,8 +5,6 @@ use self::{
     channels::ChannelConverter, interleave::Interleave, rate::RateConverter,
 };
 
-///! Useful conversions on samples
-
 /// Contains iterator that converts between channel counts
 pub mod channels;
 /// Contais iterator that interleaves channels

@@ -56,9 +56,7 @@ where
         if self.a.is_none() {
             self.a = self.source.next();
             self.b = self.source.next();
-            if self.a.is_none() {
-                return None;
-            }
+            self.a?;
             if self.b.is_none() {
                 return self.a;
             }

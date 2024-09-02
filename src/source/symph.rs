@@ -76,7 +76,7 @@ impl Symph {
                 &opt.format,
                 &Default::default(),
             )
-            .map_err(|e| Error::SymphInner(e))?;
+            .map_err(Error::SymphInner)?;
 
         // TODO: select other track if the default is unavailable
         let track =
@@ -85,7 +85,7 @@ impl Symph {
 
         let decoder = get_codecs()
             .make(&track.codec_params, &Default::default())
-            .map_err(|e| Error::SymphInner(e))?;
+            .map_err(Error::SymphInner)?;
 
         Ok(Symph {
             target_sample_rate: 0,
@@ -197,7 +197,7 @@ impl Source for Symph {
             let total = if let Some(f) = par.n_frames {
                 time_base.calc_time(f)
             } else {
-                cur.clone()
+                cur
             };
 
             Some(Timestamp::new(
@@ -231,7 +231,7 @@ impl Symph {
             readed += i;
         }
 
-        while buffer.len() > 0 {
+        while !buffer.is_empty() {
             match self.decode_packet() {
                 Ok(_) => {}
                 Err(e) => return (readed, Err(e)),
@@ -296,7 +296,7 @@ impl Symph {
     where
         T::Float: From<f32>,
     {
-        if buffer.len() == 0 {
+        if buffer.is_empty() {
             return 0;
         }
 
