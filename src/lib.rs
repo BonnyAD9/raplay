@@ -3,24 +3,26 @@
 //!
 //! ## Examples
 //! ### Play a sine wave
-//! ```rust,ignore
-//! use raplay::{Sink, source::SineSource}
+//! ```no_run
+//! use raplay::{Sink, source::Sine};
 //!
-//! let sink = Sink::default(); // Get the default output
-//! let src = SineSource::new(1000.); // Create 1000Hz sine source
-//! sink.load(src, true)?; // Play the sine wave
+//! let mut sink = Sink::default(); // Get the default output
+//! let src = Sine::new(1000.); // Create 1000Hz sine source
+//! sink.load(Box::new(src), true)?; // Play the sine wave
+//! # Ok::<(), raplay::Error>(())
 //! ```
 //!
 //! ### Play a mp3 file
-//! ```rust,ignore
+//! ```no_run
 //! use std::fs::File;
-//! use raplay::{Sink, source::Symph}
+//! use raplay::{Sink, source::Symph};
 //!
-//! let sink = Sink::default(); // Get the default output
-//! let file = File::open("music.mp3")?; // Open the mp3 file
+//! let mut sink = Sink::default(); // Get the default output
+//! let file = File::open("music.mp3").unwrap(); // Open the mp3 file
 //! let src = Symph::try_new(file, &Default::default())?; // Create a symphonia
 //!                                                       // decoder source
-//! sink.load(src, true); // Play the mp3 file
+//! sink.load(Box::new(src), true); // Play the mp3 file
+//! # Ok::<(), raplay::Error>(())
 //! ```
 //!
 //! ## Known issues
