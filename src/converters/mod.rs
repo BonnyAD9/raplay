@@ -1,4 +1,4 @@
-use cpal::{FromSample, Sample, I24, U24};
+use cpal::{FromSample, I24, Sample, U24};
 use num::{Float, NumCast, ToPrimitive};
 
 use self::{

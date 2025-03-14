@@ -4,7 +4,7 @@ use anyhow::Result;
 use cpal::SampleFormat;
 
 use crate::{
-    callback::Callback, sample_buffer::SampleBufferMut, Error, Timestamp,
+    Error, Timestamp, callback::Callback, sample_buffer::SampleBufferMut,
 };
 
 pub mod sine;

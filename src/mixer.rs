@@ -5,7 +5,7 @@ use cpal::Sample;
 use crate::{
     err::Result,
     operate_samples,
-    sample_buffer::{write_silence, SampleBufferMut},
+    sample_buffer::{SampleBufferMut, write_silence},
     shared::{CallbackInfo, Controls, SharedData},
     silence_sbuf, slice_sbuf,
     source::{DeviceConfig, VolumeIterator},

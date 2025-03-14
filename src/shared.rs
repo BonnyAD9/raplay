@@ -3,7 +3,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::{callback::Callback, err::Result, source::Source, Error};
+use crate::{Error, callback::Callback, err::Result, source::Source};
 
 /// Data shared between sink and the playback loop
 pub(super) struct SharedData {

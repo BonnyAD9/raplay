@@ -4,18 +4,18 @@ use std::{
 };
 
 use cpal::{
-    traits::{DeviceTrait, HostTrait, StreamTrait},
     Device, Devices, OutputCallbackInfo, SampleFormat, SampleRate, Stream,
     SupportedOutputConfigs, SupportedStreamConfig,
+    traits::{DeviceTrait, HostTrait, StreamTrait},
 };
 
 use crate::{
+    BufferSize, Timestamp,
     err::{Error, Result},
     mixer::Mixer,
     sample_buffer::SampleBufferMut,
     shared::{CallbackInfo, SharedData},
     source::{DeviceConfig, Source},
-    BufferSize, Timestamp,
 };
 
 /// A player that can play `Source`

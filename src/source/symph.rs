@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use cpal::{SampleFormat, I24, U24};
+use cpal::{I24, SampleFormat, U24};
 use symphonia::{
     core::{
         audio::AudioBufferRef,
@@ -18,11 +18,11 @@ use thiserror::Error;
 pub use symphonia::core::formats::FormatOptions;
 
 use crate::{
+    Timestamp,
     callback::Callback,
-    converters::{do_channels_rate, interleave, UniSample},
+    converters::{UniSample, do_channels_rate, interleave},
     err, operate_samples,
     sample_buffer::SampleBufferMut,
-    Timestamp,
 };
 
 use super::{DeviceConfig, Source, VolumeIterator};
