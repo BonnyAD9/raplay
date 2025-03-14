@@ -1,5 +1,8 @@
 # Changelog
 
+## future
+- Remove serde as default feature.
+
 ## v0.3.5
 ### API Changes
 - Make serde an optional, default feature
