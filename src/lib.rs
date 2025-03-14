@@ -73,13 +73,13 @@ mod tests {
             )?,
             &Default::default(),
         )?;
-        sink.on_callback(Some(|c| println!("callback: {c:?}")))?;
-        sink.on_err_callback(Some(|e: Error| println!("{}", e)))?;
-        sink.volume(1.)?;
+        sink.on_callback(Box::new(|c| println!("callback: {c:?}")))?;
+        sink.on_err_callback(Box::new(|e: Error| println!("{}", e)))?;
+        sink.volume(0.3)?;
         /*for i in Sink::list_devices()? {
             println!("{}", i.name()?);
         }*/
-        sink.load(src, true)?;
+        sink.load(Box::new(src), true)?;
         sink.set_fade_len(Duration::from_millis(200))?;
         //thread::sleep(Duration::from_secs(5));
         loop {
