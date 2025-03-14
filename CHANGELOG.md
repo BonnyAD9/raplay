@@ -21,6 +21,8 @@
 - Rename `SymphOptions` to `Options`.
 - Move contents of `raplay::callback` directly to `raplay`.
 - Move contents of `raplay::err` directly to `raplay`.
+- Fully move `raplay::sink` directly to `raplay`.
+- Move `raplay::sample_buffer` directly to `raplay`.
 
 ## v0.3.5
 ### API Changes

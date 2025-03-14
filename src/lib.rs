@@ -33,8 +33,6 @@
 pub mod converters;
 /// Useful reexports.
 pub mod reexp;
-pub mod sample_buffer;
-pub mod sink;
 /// Audio sources that can be played in [`Sink`].
 pub mod source;
 
@@ -46,12 +44,14 @@ mod err;
 mod mixer;
 mod shared_data;
 mod timestamp;
+mod sink;
+mod sample_buffer;
 
 pub(crate) use self::{controls::*, shared_data::*};
 
 pub use self::{
-    buffer_size::*, callback::*, callback_info::*, err::*, sink::Sink,
-    source::Source, timestamp::*,
+    buffer_size::*, callback::*, callback_info::*, err::*, sink::*,
+    source::Source, timestamp::*, sample_buffer::*,
 };
 
 #[cfg(test)]
