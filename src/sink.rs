@@ -165,14 +165,14 @@ impl Sink {
     ///
     /// # Errors
     /// - another user of one of the used mutexes panicked while using it
-    /// - source fails topreferred_config
+    /// - source fails to select preferred configuration.
     ///
     /// # Panics
     /// - the current thread already locked one of the used mutexes and didn't
     ///   release them
     pub fn load(
         &mut self,
-        mut src: impl Source + 'static,
+        mut src: Box<dyn Source>,
         play: bool,
     ) -> Result<()> {
         src.set_err_callback(self.shared.err_callback());
@@ -190,7 +190,7 @@ impl Sink {
         src.init(&self.info)?;
 
         controls.play = play;
-        *source = Some(Box::new(src));
+        *source = Some(src);
 
         if let Some(s) = &self.stream {
             if play {
@@ -373,9 +373,53 @@ impl Sink {
         Ok(cpal::default_host().devices()?)
     }
 
-    /// Sets the device to be used
+    /// Sets the device to be used. If `device` is [`None`], default device
+    /// will be selected.
+    ///
+    /// This change will be applied the next time that stream will need to
+    /// rebuild or by calling [`Self::restart_stream`].
     pub fn set_device(&mut self, device: Option<Device>) {
         self.device = device;
+    }
+
+    /// Resets the device and restarts the stream. If device is [`None`],
+    /// default device will be selected.
+    ///
+    /// You may want to call this if [`Self::load`] returns with
+    /// `Error::Cpal(crate::err::CpalError::BuildStream(crate::err::BuildStreamError::DeviceNotAvailable))`.
+    ///
+    /// # Errors
+    /// - another user of one of the used mutexes panicked while using it
+    /// - source fails to select preferred configuration.
+    ///
+    /// # Panics
+    /// - the current thread already locked one of the used mutexes and didn't
+    ///   release them
+    pub fn restart_device(&mut self, device: Option<Device>) -> Result<()> {
+        self.set_device(device);
+        self.restart_stream()
+    }
+
+    /// Rebuilds the stream. Playback is resumed right after restarting the
+    /// stream if it was playing.
+    ///
+    /// # Errors
+    /// - another user of one of the used mutexes panicked while using it
+    /// - source fails to select preferred configuration.
+    ///
+    /// # Panics
+    /// - the current thread already locked one of the used mutexes and didn't
+    ///   release them
+    pub fn restart_stream(&mut self) -> Result<()> {
+        self.stream = None;
+
+        let src = self.shared.source()?.take();
+
+        if let Some(src) = src {
+            let play = self.is_playing()?;
+            self.load(src, play)?;
+        }
+        Ok(())
     }
 
     /// Removes the callback function and returns it.

@@ -1,7 +1,7 @@
 use std::time::Duration;
 
-use anyhow::Result;
-use cpal::SampleFormat;
+pub use anyhow::Result;
+pub use cpal::SampleFormat;
 
 use crate::{
     Error, Timestamp, callback::Callback, sample_buffer::SampleBufferMut,

@@ -2,6 +2,12 @@ use thiserror::Error;
 
 use crate::source::symph;
 
+pub use cpal::{
+    BuildStreamError, DefaultStreamConfigError, DevicesError,
+    PauseStreamError, PlayStreamError, StreamError,
+    SupportedStreamConfigsError,
+};
+
 /// Result with this crate error type [`enum@Error`]
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -76,11 +82,11 @@ macro_rules! impl_cpal {
 }
 
 impl_cpal!(
-    DefaultStreamConfig -> cpal::DefaultStreamConfigError,
-    Stream -> cpal::StreamError,
-    BuildStream -> cpal::BuildStreamError,
-    PlayStream -> cpal::PlayStreamError,
-    SupportedConfigs -> cpal::SupportedStreamConfigsError,
-    PauseStreamError -> cpal::PauseStreamError,
-    DevicesError -> cpal::DevicesError,
+    DefaultStreamConfig -> DefaultStreamConfigError,
+    Stream -> StreamError,
+    BuildStream -> BuildStreamError,
+    PlayStream -> PlayStreamError,
+    SupportedConfigs -> SupportedStreamConfigsError,
+    PauseStreamError -> PauseStreamError,
+    DevicesError -> DevicesError,
 );

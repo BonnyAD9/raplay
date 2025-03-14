@@ -5,11 +5,15 @@
 - Add debug implementation to majority of structs.
 - Add option to get removed callback functions with `Sink::take_callback` and
   `Sink::take_err_callback`.
+- Reexport cpal errors, `SampleFormat` and `anyhow::Result`.
+- `Sink` can restart device and stream with `restart_device` and
+  `restart_stream`.
 
 ### Breaking changes
 - Remove serde as default feature.
 - Setters for callback functions now require `Box<dyn FnMut(...) + Send>`
   instead of `Option<impl FnMut(...) + Send + 'static>`.
+- `Sink::load` now takes `Box<dyn Source>` instead of `impl Source + 'static`.
 
 ## v0.3.5
 ### API Changes
