@@ -84,7 +84,7 @@ macro_rules! silence_sbuf {
     };
 }
 
-impl<'a> SampleBufferMut<'a> {
+impl SampleBufferMut<'_> {
     /// Gets the number of items in the buffer
     pub fn len(&self) -> usize {
         operate_samples!(self, b, b.len())
