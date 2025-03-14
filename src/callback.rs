@@ -31,12 +31,14 @@ impl<T> Callback<T> {
         Ok(())
     }
 
+    /// Take the callback and set this to [`None`].
+    pub(super) fn take(&self) -> OptionBox<dyn FnMut(T) + Send> {
+        self.0.lock().unwrap().take()
+    }
+
     /// Sets new value of the error callback.
-    pub(super) fn set(
-        &self,
-        f: Option<Box<dyn FnMut(T) + Send>>,
-    ) -> Result<()> {
-        *self.0.lock()? = f;
+    pub(super) fn set(&self, f: Box<dyn FnMut(T) + Send>) -> Result<()> {
+        *self.0.lock()? = Some(f);
         Ok(())
     }
 }

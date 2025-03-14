@@ -23,7 +23,7 @@ pub struct Sink {
     /// Data shared with the playback loop ([`Mixer`])
     shared: Arc<SharedData>,
     // The stream is never read, it just stays alive so that the audio plays
-    /// The stream, if you drop this the playbakc loop will stop
+    /// The stream, if you drop this the playbakck loop will stop
     stream: Option<Stream>,
     /// Info about the current device configuration
     info: DeviceConfig,
@@ -135,13 +135,9 @@ impl Sink {
     ///   release them
     pub fn on_callback(
         &self,
-        callback: Option<impl FnMut(CallbackInfo) + Send + 'static>,
+        callback: Box<dyn FnMut(CallbackInfo) + Send>,
     ) -> Result<()> {
-        self.shared.callback().set(
-            callback.map(|c| -> Box<dyn FnMut(CallbackInfo) + Send> {
-                Box::new(c)
-            }),
-        )
+        self.shared.callback().set(callback)
     }
 
     /// Sets the error callback method.
@@ -159,11 +155,9 @@ impl Sink {
     ///   release them
     pub fn on_err_callback(
         &self,
-        callback: Option<impl FnMut(Error) + Send + 'static>,
+        callback: Box<dyn FnMut(Error) + Send>,
     ) -> Result<()> {
-        self.shared.err_callback().set(
-            callback.map(|c| -> Box<dyn FnMut(Error) + Send> { Box::new(c) }),
-        )
+        self.shared.err_callback().set(callback)
     }
 
     /// Discards the old source and sets the new source. Starts playing if
@@ -382,6 +376,24 @@ impl Sink {
     /// Sets the device to be used
     pub fn set_device(&mut self, device: Option<Device>) {
         self.device = device;
+    }
+
+    /// Removes the callback function and returns it.
+    ///
+    /// # Panics
+    /// - If locking mutex returns error.
+    pub fn take_callback(
+        &self,
+    ) -> Option<Box<dyn FnMut(CallbackInfo) + Send>> {
+        self.shared.callback().take()
+    }
+
+    /// Removes the error callback function and returns it.
+    ///
+    /// # Panics
+    /// - If locking mutex returns error.
+    pub fn take_err_callback(&self) -> Option<Box<dyn FnMut(Error) + Send>> {
+        self.shared.err_callback().take()
     }
 }
 
