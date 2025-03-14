@@ -2,6 +2,7 @@ use cpal::Sample;
 
 // TODO: smarter conversion
 /// Iterator that converts number of channels
+#[derive(Debug)]
 pub struct ChannelConverter<S: Sample, I: Iterator<Item = S>> {
     /// Original iterator
     source: I,

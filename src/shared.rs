@@ -1,4 +1,5 @@
 use std::{
+    fmt::Debug,
     sync::{Mutex, MutexGuard},
     time::{Duration, Instant},
 };
@@ -18,7 +19,7 @@ pub(super) struct SharedData {
 }
 
 /// Used to control the playback loop from the sink
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(super) struct Controls {
     /// Fade duration when play/pause
     pub(super) fade_duration: Duration,
@@ -85,6 +86,16 @@ impl SharedData {
 impl Default for SharedData {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Debug for SharedData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SharedData")
+            .field("controls", &self.controls)
+            .field("callback", &self.callback)
+            .field("err_callback", &self.err_callback)
+            .finish()
     }
 }
 

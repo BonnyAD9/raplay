@@ -2,6 +2,7 @@ use cpal::Sample;
 use num::{Float, NumCast, One, ToPrimitive, Zero};
 
 /// Iterator that converts sample rates
+#[derive(Debug)]
 pub struct RateConverter<S, I>
 where
     S: Sample + std::ops::Add<Output = S>,

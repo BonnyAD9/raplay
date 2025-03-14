@@ -12,6 +12,7 @@ use crate::{
 };
 
 /// Struct that handles the playback loop
+#[derive(Debug)]
 pub(super) struct Mixer {
     /// Data shared with [`Sink`]
     shared: Arc<SharedData>,

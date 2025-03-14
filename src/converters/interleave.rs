@@ -1,4 +1,5 @@
 /// Iterator that interleaves channels
+#[derive(Debug)]
 pub struct Interleave<I: Iterator<Item = T>, T> {
     /// Channels to interleave
     iterators: Vec<I>,

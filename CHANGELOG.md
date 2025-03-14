@@ -2,6 +2,7 @@
 
 ## future
 - Remove serde as default feature.
+- Add debug implementation to majority of structs.
 
 ## v0.3.5
 ### API Changes

@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{fmt::Debug, time::Duration};
 
 use cpal::{I24, SampleFormat, U24};
 use symphonia::{
@@ -360,7 +360,23 @@ impl Symph {
     }
 }
 
-#[derive(Default)]
+impl Debug for Symph {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Symph")
+            .field("target_sample_rate", &self.target_sample_rate)
+            .field("target_channels", &self.target_channels)
+            .field("source_sample_rate", &self.source_sample_rate)
+            .field("source_channels", &self.source_channels)
+            .field("track_id", &self.track_id)
+            .field("buffer_start", &self.buffer_start)
+            .field("volume", &self.volume)
+            .field("last_ts", &self.last_ts)
+            .field("err_callback", &self.err_callback)
+            .finish()
+    }
+}
+
+#[derive(Debug, Default)]
 pub struct SymphOptions {
     pub format: FormatOptions,
 }

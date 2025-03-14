@@ -433,7 +433,10 @@ fn select_config(
 
 impl std::fmt::Debug for Sink {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Sink").field("info", &self.info).finish()
+        f.debug_struct("Sink")
+            .field("shared", &self.shared)
+            .field("info", &self.info)
+            .finish()
     }
 }
 

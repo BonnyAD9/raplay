@@ -8,6 +8,7 @@ use crate::{operate_samples, sample_buffer::SampleBufferMut};
 use super::{Source, VolumeIterator};
 
 /// Source of sine waves
+#[derive(Debug)]
 pub struct SineSource {
     /// Frequency of the sine wave
     frequency: f32,
