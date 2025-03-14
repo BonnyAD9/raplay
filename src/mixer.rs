@@ -3,10 +3,10 @@ use std::{sync::Arc, time::Instant};
 use cpal::Sample;
 
 use crate::{
+    CallbackInfo, Controls, SharedData,
     err::Result,
     operate_samples,
     sample_buffer::{SampleBufferMut, write_silence},
-    shared::{CallbackInfo, Controls, SharedData},
     silence_sbuf, slice_sbuf,
     source::{DeviceConfig, VolumeIterator},
 };

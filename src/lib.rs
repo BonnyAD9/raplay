@@ -27,22 +27,29 @@
 //! - If the output device doesn't support the required sample rate, aliasing
 //!   may occur.
 
-pub mod callback;
 /// Useful conversions on samples.
 pub mod converters;
-pub mod err;
+/// Useful reexports.
+pub mod reexp;
 pub mod sample_buffer;
 pub mod sink;
 /// Audio sources that can be played in [`Sink`].
 pub mod source;
 
 mod buffer_size;
+mod callback;
+mod callback_info;
+mod controls;
+mod err;
 mod mixer;
-mod shared;
+mod shared_data;
 mod timestamp;
 
+pub(crate) use self::{controls::*, shared_data::*};
+
 pub use self::{
-    buffer_size::*, err::Error, shared::*, sink::Sink, timestamp::*,
+    buffer_size::*, callback::*, callback_info::*, err::*, sink::Sink,
+    source::Source, timestamp::*,
 };
 
 #[cfg(test)]

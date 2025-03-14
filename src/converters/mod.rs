@@ -1,16 +1,11 @@
 use cpal::{FromSample, I24, Sample, U24};
 use num::{Float, NumCast, ToPrimitive};
 
-use self::{
-    channels::ChannelConverter, interleave::Interleave, rate::RateConverter,
-};
+mod channel;
+mod interleave;
+mod rate;
 
-/// Contains iterator that converts between channel counts
-pub mod channels;
-/// Contais iterator that interleaves channels
-pub mod interleave;
-/// Contains iterator that converts rate
-pub mod rate;
+pub use self::{channel::*, interleave::*, rate::*};
 
 /// Craetes iterator that interleaves the channels of `i`
 pub fn interleave<S, I: Iterator<Item = S>, II: Iterator<Item = I>>(
@@ -25,24 +20,20 @@ pub fn channels<S: Sample, I: Iterator<Item = S>>(
     source: I,
     source_channels: u32,
     target_channels: u32,
-) -> ChannelConverter<S, I> {
-    ChannelConverter::new(source, source_channels, target_channels)
+) -> Channel<S, I> {
+    Channel::new(source, source_channels, target_channels)
 }
 
 /// Creates iterator that converts the sample rate of `source` from
 /// `source_rate` to `target_rate` by lineary interpolating the values
-pub fn rate<S, I, R>(
-    source: I,
-    source_rate: R,
-    target_rate: R,
-) -> RateConverter<S, I>
+pub fn rate<S, I, R>(source: I, source_rate: R, target_rate: R) -> Rate<S, I>
 where
     S: Sample + std::ops::Add<Output = S>,
     I: Iterator<Item = S>,
     S::Float: Float + NumCast,
     R: ToPrimitive,
 {
-    RateConverter::new(source, source_rate, target_rate)
+    Rate::new(source, source_rate, target_rate)
 }
 
 /// Creates iterator that interleaves the channels of `source`, than
@@ -57,7 +48,7 @@ pub fn do_interleave_channels_rate<S, I, R, II>(
     target_channels: u32,
     source_rate: R,
     target_rate: R,
-) -> RateConverter<S, ChannelConverter<S, Interleave<I, S>>>
+) -> Rate<S, Channel<S, Interleave<I, S>>>
 where
     S: Sample + std::ops::Add<Output = S>,
     I: Iterator<Item = S>,
@@ -84,7 +75,7 @@ pub fn do_channels_rate<S, I, R>(
     target_channels: u32,
     source_rate: R,
     target_rate: R,
-) -> RateConverter<S, ChannelConverter<S, impl Iterator<Item = S>>>
+) -> Rate<S, Channel<S, impl Iterator<Item = S>>>
 where
     S: Sample + std::ops::Add<Output = S>,
     I: Iterator<Item = S>,

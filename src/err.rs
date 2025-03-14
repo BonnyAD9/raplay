@@ -2,7 +2,7 @@ use thiserror::Error;
 
 use crate::source::symph;
 
-pub use cpal::{
+use cpal::{
     BuildStreamError, DefaultStreamConfigError, DevicesError,
     PauseStreamError, PlayStreamError, StreamError,
     SupportedStreamConfigsError,

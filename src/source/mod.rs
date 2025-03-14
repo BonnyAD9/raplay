@@ -1,7 +1,7 @@
 use std::time::Duration;
 
-pub use anyhow::Result;
-pub use cpal::SampleFormat;
+use anyhow::Result;
+use cpal::SampleFormat;
 
 use crate::{
     Error, Timestamp, callback::Callback, sample_buffer::SampleBufferMut,
@@ -10,7 +10,7 @@ use crate::{
 pub mod sine;
 pub mod symph;
 
-pub use sine::SineSource;
+pub use sine::Sine;
 pub use symph::Symph;
 
 // TODO: better selecting algorithm (if not sample rate at least channel count)

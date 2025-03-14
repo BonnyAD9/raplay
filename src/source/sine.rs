@@ -9,7 +9,7 @@ use super::{Source, VolumeIterator};
 
 /// Source of sine waves
 #[derive(Debug)]
-pub struct SineSource {
+pub struct Sine {
     /// Frequency of the sine wave
     frequency: f32,
     /// Number of channels of the result
@@ -22,7 +22,7 @@ pub struct SineSource {
     volume: VolumeIterator,
 }
 
-impl Source for SineSource {
+impl Source for Sine {
     fn init(&mut self, info: &super::DeviceConfig) -> Result<()> {
         self.channels = info.channel_count;
         self.iter_step = 2. * PI * self.frequency / info.sample_rate as f32;
@@ -42,7 +42,7 @@ impl Source for SineSource {
     }
 }
 
-impl SineSource {
+impl Sine {
     /// Creates source that generates infinite sine wave with the given
     /// frequency
     pub fn new(frequency: f32) -> Self {

@@ -1,3 +1,8 @@
+mod err;
+mod options;
+
+pub use self::{err::*, options::*};
+
 use std::{fmt::Debug, time::Duration};
 
 use cpal::{I24, SampleFormat, U24};
@@ -13,15 +18,12 @@ use symphonia::{
     },
     default::{get_codecs, get_probe},
 };
-use thiserror::Error;
-
-pub use symphonia::core::formats::FormatOptions;
 
 use crate::{
     Timestamp,
     callback::Callback,
     converters::{UniSample, do_channels_rate, interleave},
-    err, operate_samples,
+    err as cerr, operate_samples,
     sample_buffer::SampleBufferMut,
 };
 
@@ -50,7 +52,7 @@ pub struct Symph {
     /// The timestamp of the last frame
     last_ts: u64,
     /// Error callback for recoverable errors.
-    err_callback: Callback<err::Error>,
+    err_callback: Callback<cerr::Error>,
 }
 
 impl Symph {
@@ -62,8 +64,8 @@ impl Symph {
     /// - no decoder was found for the codec, insufficient codec parameters
     pub fn try_new<T: MediaSource + 'static>(
         source: T,
-        opt: &SymphOptions,
-    ) -> err::Result<Symph> {
+        opt: &Options,
+    ) -> cerr::Result<Symph> {
         let stream = MediaSourceStream::new(
             Box::new(source),
             MediaSourceStreamOptions::default(),
@@ -104,7 +106,7 @@ impl Symph {
 }
 
 impl Source for Symph {
-    fn set_err_callback(&mut self, err_callback: &Callback<err::Error>) {
+    fn set_err_callback(&mut self, err_callback: &Callback<cerr::Error>) {
         self.err_callback = err_callback.clone();
     }
 
@@ -120,7 +122,7 @@ impl Source for Symph {
     ) -> (usize, anyhow::Result<()>) {
         operate_samples!(buffer, b, {
             let (l, e) = self.decode(b);
-            (l, e.map_err(|e| err::Error::Symph(e).into()))
+            (l, e.map_err(|e| cerr::Error::Symph(e).into()))
         })
     }
 
@@ -185,7 +187,7 @@ impl Source for Symph {
         self.buffer_start = None;
         self.last_ts = pos.actual_ts;
         self.get_time()
-            .ok_or(err::Error::CannotDetermineTimestamp.into())
+            .ok_or(cerr::Error::CannotDetermineTimestamp.into())
     }
 
     fn get_time(&self) -> Option<Timestamp> {
@@ -374,23 +376,4 @@ impl Debug for Symph {
             .field("err_callback", &self.err_callback)
             .finish()
     }
-}
-
-#[derive(Debug, Default)]
-pub struct SymphOptions {
-    pub format: FormatOptions,
-}
-
-/// Error type for the symph
-#[derive(Error, Debug)]
-pub enum Error {
-    /// Cannot select track to decode
-    #[error("Failed to select a track")]
-    CantSelectTrack,
-    /// Recoverable error from symphonia
-    #[error("Recoverable symphonia error: {0}")]
-    SymphRecoverable(symphonia::core::errors::Error),
-    /// Error from symphonia
-    #[error(transparent)]
-    SymphInner(#[from] symphonia::core::errors::Error),
 }

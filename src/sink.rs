@@ -10,11 +10,10 @@ use cpal::{
 };
 
 use crate::{
-    BufferSize, Timestamp,
+    BufferSize, CallbackInfo, SharedData, Timestamp,
     err::{Error, Result},
     mixer::Mixer,
     sample_buffer::SampleBufferMut,
-    shared::{CallbackInfo, SharedData},
     source::{DeviceConfig, Source},
 };
 
@@ -386,7 +385,7 @@ impl Sink {
     /// default device will be selected.
     ///
     /// You may want to call this if [`Self::load`] returns with
-    /// `Error::Cpal(crate::err::CpalError::BuildStream(crate::err::BuildStreamError::DeviceNotAvailable))`.
+    /// `Error::Cpal(CpalError::BuildStream(BuildStreamError::DeviceNotAvailable))`.
     ///
     /// # Errors
     /// - another user of one of the used mutexes panicked while using it

@@ -3,7 +3,7 @@ use num::{Float, NumCast, One, ToPrimitive, Zero};
 
 /// Iterator that converts sample rates
 #[derive(Debug)]
-pub struct RateConverter<S, I>
+pub struct Rate<S, I>
 where
     S: Sample + std::ops::Add<Output = S>,
     I: Iterator<Item = S>,
@@ -16,7 +16,7 @@ where
     b: Option<S>,
 }
 
-impl<S, I> RateConverter<S, I>
+impl<S, I> Rate<S, I>
 where
     S: Sample + std::ops::Add<Output = S>,
     I: Iterator<Item = S>,
@@ -29,7 +29,7 @@ where
         source_rate: R,
         target_rate: R,
     ) -> Self {
-        RateConverter {
+        Rate {
             source,
             ratio: <S::Float as NumCast>::from(source_rate).unwrap()
                 / <S::Float as NumCast>::from(target_rate).unwrap(),
@@ -40,7 +40,7 @@ where
     }
 }
 
-impl<S, I> Iterator for RateConverter<S, I>
+impl<S, I> Iterator for Rate<S, I>
 where
     S: Sample + std::ops::Add<Output = S>,
     I: Iterator<Item = S>,

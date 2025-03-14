@@ -3,7 +3,7 @@ use cpal::Sample;
 // TODO: smarter conversion
 /// Iterator that converts number of channels
 #[derive(Debug)]
-pub struct ChannelConverter<S: Sample, I: Iterator<Item = S>> {
+pub struct Channel<S: Sample, I: Iterator<Item = S>> {
     /// Original iterator
     source: I,
     /// Number of channels in the original iterator
@@ -15,11 +15,11 @@ pub struct ChannelConverter<S: Sample, I: Iterator<Item = S>> {
     index: usize,
 }
 
-impl<S: Sample, I: Iterator<Item = S>> ChannelConverter<S, I> {
+impl<S: Sample, I: Iterator<Item = S>> Channel<S, I> {
     /// Creates new channel converter iterator from iterator source and the
     /// source and target channel counts.
     pub fn new(source: I, source_channels: u32, target_channels: u32) -> Self {
-        ChannelConverter {
+        Channel {
             source,
             source_channels,
             target_channels,
@@ -28,7 +28,7 @@ impl<S: Sample, I: Iterator<Item = S>> ChannelConverter<S, I> {
     }
 }
 
-impl<S: Sample, I: Iterator<Item = S>> Iterator for ChannelConverter<S, I> {
+impl<S: Sample, I: Iterator<Item = S>> Iterator for Channel<S, I> {
     type Item = S;
 
     fn next(&mut self) -> Option<Self::Item> {

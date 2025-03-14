@@ -5,15 +5,22 @@
 - Add debug implementation to majority of structs.
 - Add option to get removed callback functions with `Sink::take_callback` and
   `Sink::take_err_callback`.
-- Reexport cpal errors, `SampleFormat` and `anyhow::Result`.
+- Reexport cpal errors, `SampleFormat`, `FromSample` and `anyhow::Result`.
 - `Sink` can restart device and stream with `restart_device` and
   `restart_stream`.
+- Add alias for source as `raplay::Source`.
 
 ### Breaking changes
 - Remove serde as default feature.
 - Setters for callback functions now require `Box<dyn FnMut(...) + Send>`
   instead of `Option<impl FnMut(...) + Send + 'static>`.
 - `Sink::load` now takes `Box<dyn Source>` instead of `impl Source + 'static`.
+- Rename `ChannelConverter` and `RateConverter` to `Channel` and `Rate`.
+- Move contents of namespaces in `converters::*` directly to `converters::*`.
+- Rename `SineSource` to `Sine`.
+- Rename `SymphOptions` to `Options`.
+- Move contents of `raplay::callback` directly to `raplay`.
+- Move contents of `raplay::err` directly to `raplay`.
 
 ## v0.3.5
 ### API Changes
