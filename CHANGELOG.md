@@ -9,6 +9,9 @@
 - `Sink` can restart device and stream with `restart_device` and
   `restart_stream`.
 - Add alias for source as `raplay::Source`.
+- Allow prefetching of sources with `Sink::prefetch`.
+- Allow sending notification when source is about to end with
+  `Sink::prefetch_notify`.
 
 ### Breaking changes
 - Remove serde as default feature.
@@ -23,6 +26,9 @@
 - Move contents of `raplay::err` directly to `raplay`.
 - Fully move `raplay::sink` directly to `raplay`.
 - Move `raplay::sample_buffer` directly to `raplay`.
+- `CallbackInfo::SourceEnded` now also has information on prefetch state.
+- When source ends, `SourceEnded` will be sent only once, than will be sent the
+  message `NoSource`.
 
 ## v0.3.5
 ### API Changes

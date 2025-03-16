@@ -42,48 +42,51 @@ mod callback_info;
 mod controls;
 mod err;
 mod mixer;
-mod shared_data;
-mod timestamp;
-mod sink;
+mod prefetch_state;
 mod sample_buffer;
+mod shared_data;
+mod sink;
+mod timestamp;
 
 pub(crate) use self::{controls::*, shared_data::*};
 
 pub use self::{
-    buffer_size::*, callback::*, callback_info::*, err::*, sink::*,
-    source::Source, timestamp::*, sample_buffer::*,
+    buffer_size::*, callback::*, callback_info::*, err::*, prefetch_state::*,
+    sample_buffer::*, sink::*, source::Source, timestamp::*,
 };
 
 #[cfg(test)]
 mod tests {
-    /*use std::{fs::File, io::stdin, time::Duration};
+    use std::{fs::File, io::stdin, path::Path, thread, time::Duration};
 
-    use crate::{err::Error, source::Symph, BufferSize, Sink};
+    use crate::{BufferSize, Sink, err::Error, source::Symph};
 
     use anyhow::Result;
     use cpal::traits::DeviceTrait;
 
     #[test]
     fn play_audio() -> Result<()> {
-        let home_path = include_str!("../tmp/home").to_owned();
-
         let mut sink = Sink::default();
-        let src = Symph::try_new(
-            File::open(
-                home_path + "/music/4tet - 4th -03 Air.mp3",
-                //HOME_PATH + "/music/AJR - Neotheater - 01 Next Up Forever.flac",
-            )?,
-            &Default::default(),
+        sink.on_callback(Box::new(|c| eprintln!("callback: {c:?}")))?;
+        sink.on_err_callback(Box::new(|e: Error| eprintln!("err: {}", e)))?;
+        sink.volume(0.3 * 0.3)?;
+        sink.prefetch_notify(Duration::from_secs(1))?;
+
+        let src = open_symph("music/4tet - 4th -03 Air.mp3")?;
+        let src1 = open_symph(
+            "music/Jacob Collier - Djesse Vol. 4/01. 100,000 Voices.flac",
         )?;
-        sink.on_callback(Box::new(|c| println!("callback: {c:?}")))?;
-        sink.on_err_callback(Box::new(|e: Error| println!("{}", e)))?;
-        sink.volume(0.3)?;
+        let src2 = open_symph(
+            "music/Jacob Collier - Djesse Vol. 4/02. She Put Sunshine.flac",
+        )?;
         /*for i in Sink::list_devices()? {
             println!("{}", i.name()?);
         }*/
-        sink.load(Box::new(src), true)?;
+        sink.load(Box::new(src1), true)?;
+        sink.prefetch(Some(Box::new(src2)))?;
         sink.set_fade_len(Duration::from_millis(200))?;
-        //thread::sleep(Duration::from_secs(5));
+        sink.seek_to(Duration::from_secs(60 * 4 + 40))?;
+        //thread::sleep(Duration::MAX);
         loop {
             let mut s = String::new();
             _ = stdin().read_line(&mut s);
@@ -91,7 +94,15 @@ mod tests {
             let ts = sink.get_timestamp()?;
             println!("{:?}/{:?}", ts.current, ts.total);
         }
-    }*/
+    }
+
+    fn open_symph(p: impl AsRef<Path>) -> Result<Symph> {
+        let home_path = include_str!("../tmp/home").to_owned();
+        Ok(Symph::try_new(
+            File::open(Path::new(&home_path).join(p))?,
+            &Default::default(),
+        )?)
+    }
 
     /*#[test]
     fn play_sine() -> Result<()> {

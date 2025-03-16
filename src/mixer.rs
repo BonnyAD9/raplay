@@ -1,9 +1,12 @@
-use std::{sync::Arc, time::Instant};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use cpal::Sample;
 
 use crate::{
-    CallbackInfo, Controls, SharedData,
+    CallbackInfo, Controls, PrefetchState, SharedData, Source,
     err::Result,
     operate_samples,
     sample_buffer::{SampleBufferMut, write_silence},
@@ -21,6 +24,8 @@ pub(super) struct Mixer {
     /// The last status of play
     last_play: Option<bool>,
     last_sound: bool,
+    /// If the prefetch callback was sent.
+    prefetched: bool,
     /// Info about the device that is playing
     info: DeviceConfig,
 }
@@ -33,6 +38,7 @@ impl Mixer {
             volume: VolumeIterator::default(),
             last_play: None,
             last_sound: false,
+            prefetched: false,
             info,
         }
     }
@@ -80,7 +86,7 @@ impl Mixer {
                 );
             }
 
-            self.play_source(data, controls)?;
+            self.play(data, controls)?;
         } else {
             // Change the volume transition if the transition is to play or
             // if it was previously played
@@ -99,7 +105,7 @@ impl Mixer {
 
             if len != 0 {
                 // play the silencing
-                self.play_source(&mut slice_sbuf!(data, 0..len), controls)?;
+                self.play(&mut slice_sbuf!(data, 0..len), controls)?;
                 self.last_sound = true;
             }
 
@@ -121,56 +127,148 @@ impl Mixer {
         Ok(())
     }
 
-    /// Writes the data from the source to the buffer `data`
-    fn play_source(
+    /// Writes the data from the source to the buffer `data`. Also handles
+    /// prefetching.
+    fn play(
         &mut self,
         data: &mut SampleBufferMut,
         controls: Controls,
     ) -> Result<()> {
-        let mut src = self.shared.source()?;
+        let mut src = self.shared.source()?.take();
 
-        match src.as_mut() {
-            Some(s) => {
-                let supports_volume = s.volume(self.volume);
+        let cnt = self.play_source(&mut src, data, &controls)?;
 
-                let (cnt, e) = s.read(data);
+        let mut data = slice_sbuf!(data, cnt..);
 
-                if let Err(e) = e {
-                    _ = self.shared.invoke_err_callback(e.into());
-                }
+        if data.is_empty() {
+            return self.check_prefetch_callback(src, &controls, None);
+        }
 
-                if supports_volume {
-                    self.volume.skip_vol(cnt);
-                }
+        {
+            let mut psrc = self.shared.prefeched()?;
 
-                operate_samples!(data, d, {
-                    // manually change the volume of each sample if the
-                    // source doesn't support volume
-                    if !supports_volume {
-                        if controls.volume != 1. {
-                            #[allow(clippy::useless_conversion)]
-                            for s in d.iter_mut() {
-                                *s = (*s)
-                                    .mul_amp(self.volume.next_vol().into());
-                            }
-                        } else if controls.volume == 0. {
-                            write_silence(&mut d[..cnt]);
-                        }
-                    }
-
-                    write_silence(&mut d[cnt..]);
-                    if cnt < d.len() {
-                        *src = None;
-                        self.shared.invoke_callback(CallbackInfo::SourceEnded)
-                    } else {
-                        Ok(())
-                    }
-                })
-            }
-            None => {
+            let Some(src) = psrc.as_mut() else {
                 silence_sbuf!(data);
-                Ok(())
+                return if src.is_none() {
+                    self.shared.invoke_callback(CallbackInfo::NoSource)
+                } else {
+                    self.shared.invoke_callback(CallbackInfo::SourceEnded(
+                        PrefetchState::NoPrefetch,
+                    ))
+                };
+            };
+
+            let cfg = src.preferred_config();
+
+            if cfg.is_some() && cfg.as_ref() != Some(&self.info) {
+                return self.shared.invoke_callback(
+                    CallbackInfo::SourceEnded(PrefetchState::PrefetchFailed),
+                );
             }
+
+            src.init(&self.info)?;
+        }
+
+        self.prefetched = false;
+
+        let mut src = self.shared.prefeched()?.take();
+
+        let cnt = self.play_source(&mut src, &mut data, &controls)?;
+
+        let data = slice_sbuf!(data, cnt..);
+
+        if !data.is_empty() {
+            silence_sbuf!(data);
+            self.shared.invoke_callback(CallbackInfo::SourceEnded(
+                PrefetchState::PrefetchSuccessful,
+            ))?;
+            self.shared.invoke_callback(CallbackInfo::SourceEnded(
+                PrefetchState::NoPrefetch,
+            ))
+        } else {
+            self.check_prefetch_callback(
+                src,
+                &controls,
+                Some(CallbackInfo::SourceEnded(
+                    PrefetchState::PrefetchSuccessful,
+                )),
+            )
+        }
+    }
+
+    fn play_source(
+        &mut self,
+        src: &mut Option<Box<dyn Source>>,
+        data: &mut SampleBufferMut,
+        controls: &Controls,
+    ) -> Result<usize> {
+        match src.as_mut() {
+            Some(s) => self.play_source_inner(s, data, controls),
+            None => Ok(0),
+        }
+    }
+
+    fn play_source_inner(
+        &mut self,
+        src: &mut Box<dyn Source>,
+        data: &mut SampleBufferMut,
+        controls: &Controls,
+    ) -> Result<usize> {
+        let supports_volume = src.volume(self.volume);
+
+        let (cnt, e) = src.read(data);
+
+        if let Err(e) = e {
+            _ = self.shared.invoke_err_callback(e.into());
+        }
+
+        if supports_volume {
+            self.volume.skip_vol(cnt);
+        }
+
+        operate_samples!(data, d, {
+            // manually change the volume of each sample if the
+            // source doesn't support volume
+            if !supports_volume {
+                if controls.volume != 1. {
+                    #[allow(clippy::useless_conversion)]
+                    for s in d.iter_mut() {
+                        *s = (*s).mul_amp(self.volume.next_vol().into());
+                    }
+                } else if controls.volume == 0. {
+                    write_silence(&mut d[..cnt]);
+                }
+            }
+
+            Ok(cnt)
+        })
+    }
+
+    /// Check if prefetch notification should be sent. Set current source to
+    /// `src`.
+    fn check_prefetch_callback(
+        &mut self,
+        src: Option<Box<dyn Source>>,
+        controls: &Controls,
+        qcb: Option<CallbackInfo>,
+    ) -> Result<()> {
+        let cb = (!self.prefetched && controls.prefetch != Duration::ZERO)
+            .then(|| {
+                src.as_ref()
+                    .and_then(|t| t.get_time())
+                    .map(|ts| ts.total - ts.current)
+                    .and_then(|t| (t <= controls.prefetch).then_some(t))
+            })
+            .flatten();
+        *(self.shared.source()?) = src;
+        if let Some(cb) = qcb {
+            self.shared.invoke_callback(cb)?;
+        }
+        if let Some(t) = cb {
+            self.prefetched = true;
+            self.shared.invoke_callback(CallbackInfo::PrefetchTime(t))
+        } else {
+            Ok(())
         }
     }
 }

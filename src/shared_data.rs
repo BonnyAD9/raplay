@@ -11,6 +11,8 @@ pub struct SharedData {
     controls: Mutex<Controls>,
     /// The source for the audio
     source: Mutex<Option<Box<dyn Source>>>,
+    /// Prefetched source that will play next.
+    prefetched: Mutex<Option<Box<dyn Source>>>,
     /// Function used as callback from the playback loop on events
     callback: Callback<CallbackInfo>,
     /// Function used as callback when errors occur on the playback loop
@@ -23,6 +25,7 @@ impl SharedData {
         Self {
             controls: Mutex::new(Controls::new()),
             source: Mutex::new(None),
+            prefetched: Mutex::new(None),
             callback: Callback::default(),
             err_callback: Callback::default(),
         }
@@ -38,6 +41,12 @@ impl SharedData {
         &self,
     ) -> Result<MutexGuard<'_, Option<Box<dyn Source>>>> {
         Ok(self.source.lock()?)
+    }
+
+    pub(super) fn prefeched(
+        &self,
+    ) -> Result<MutexGuard<'_, Option<Box<dyn Source>>>> {
+        Ok(self.prefetched.lock()?)
     }
 
     /// Invokes callback function

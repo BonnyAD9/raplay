@@ -356,7 +356,7 @@ impl Sink {
         self.preferred_buffer_size = size;
     }
 
-    /// Gets the preferred buffer size set by you
+    /// Gets the preferred buffer size set by you.
     pub fn get_preferred_buffer_size(&self) -> BufferSize {
         self.preferred_buffer_size
     }
@@ -437,6 +437,44 @@ impl Sink {
     /// - If locking mutex returns error.
     pub fn take_err_callback(&self) -> Option<Box<dyn FnMut(Error) + Send>> {
         self.shared.err_callback().take()
+    }
+
+    /// Prefetch the next song. Return the previous value of prefetch if any.
+    ///
+    /// # Errors
+    /// - another user of one of the used mutexes panicked while using it.
+    ///
+    /// # Panics
+    /// - the current thread already locked one of the used mutexes and didn't
+    ///   release them
+    pub fn prefetch(
+        &self,
+        mut src: Option<Box<dyn Source>>,
+    ) -> Result<Option<Box<dyn Source>>> {
+        if let Some(src) = &mut src {
+            src.set_err_callback(self.shared.err_callback());
+        }
+        std::mem::swap(&mut src, &mut *(self.shared.prefeched()?));
+        Ok(src)
+    }
+
+    /// Sets how long before source ends should notification about the source
+    /// ending be sent. Setting this to [`Duration::ZERO`] will disable this
+    /// feature.
+    ///
+    /// If the remaining length of source is less than `rem`, notification
+    /// will be sent using the callback function with
+    /// [`CallbackInfo::PrefetchTime`] with the remaining time.
+    ///
+    /// # Errors
+    /// - another user of one of the used mutexes panicked while using it.
+    ///
+    /// # Panics
+    /// - the current thread already locked one of the used mutexes and didn't
+    ///   release them
+    pub fn prefetch_notify(&self, rem: Duration) -> Result<()> {
+        self.shared.controls()?.prefetch = rem;
+        Ok(())
     }
 }
 
