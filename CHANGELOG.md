@@ -12,11 +12,17 @@
 - Allow prefetching of sources with `Sink::prefetch`.
 - Allow sending notification when source is about to end with
   `Sink::prefetch_notify`.
+- Add option to get current sink device with `Sink::get_device`.
+- Add `Sink::get_fade_len`.
 
 ### Breaking changes
 - Remove serde as default feature.
 - Setters for callback functions now require `Box<dyn FnMut(...) + Send>`
   instead of `Option<impl FnMut(...) + Send + 'static>`.
+- Setters of callback functions on sink now return the previous callback
+  functions.
+- `Sink::set_fade_len` now returns the previous fade length.
+- `Sink::set_device` now returns the previous device.
 - `Sink::load` now takes `Box<dyn Source>` instead of `impl Source + 'static`.
 - Rename `ChannelConverter` and `RateConverter` to `Channel` and `Rate`.
 - Move contents of namespaces in `converters::*` directly to `converters::*`.

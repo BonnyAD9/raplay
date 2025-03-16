@@ -1,12 +1,13 @@
 use std::{
     fmt::Debug,
+    mem,
     sync::{Arc, Mutex},
 };
 
 use crate::err::Result;
 
 type ArcMutex<T> = Arc<Mutex<T>>;
-type OptionBox<T> = Option<Box<T>>;
+pub type OptionBox<T> = Option<Box<T>>;
 
 /// Mutexed callback function.
 pub struct Callback<T>(ArcMutex<OptionBox<dyn FnMut(T) + Send>>);
@@ -37,9 +38,11 @@ impl<T> Callback<T> {
     }
 
     /// Sets new value of the error callback.
-    pub(super) fn set(&self, f: Box<dyn FnMut(T) + Send>) -> Result<()> {
-        *self.0.lock()? = Some(f);
-        Ok(())
+    pub(super) fn set(
+        &self,
+        f: Box<dyn FnMut(T) + Send>,
+    ) -> Result<OptionBox<dyn FnMut(T) + Send>> {
+        Ok(mem::replace(&mut *self.0.lock()?, Some(f)))
     }
 }
 

@@ -1,4 +1,5 @@
 use std::{
+    mem,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -10,7 +11,7 @@ use cpal::{
 };
 
 use crate::{
-    BufferSize, CallbackInfo, SharedData, Timestamp,
+    BufferSize, CallbackInfo, OptionBox, SharedData, Timestamp,
     err::{Error, Result},
     mixer::Mixer,
     sample_buffer::SampleBufferMut,
@@ -119,9 +120,10 @@ impl Sink {
         Ok(())
     }
 
-    /// Sets the callback method.
+    /// Sets the callback function. Returns previous callback function.
     ///
-    /// The function is called when the source ends.
+    /// The function is called when playback event occurs. For example when
+    /// source ends.
     ///
     /// The function is called from another thread.
     ///
@@ -135,11 +137,12 @@ impl Sink {
     pub fn on_callback(
         &self,
         callback: Box<dyn FnMut(CallbackInfo) + Send>,
-    ) -> Result<()> {
+    ) -> Result<OptionBox<dyn FnMut(CallbackInfo) + Send>> {
         self.shared.callback().set(callback)
     }
 
-    /// Sets the error callback method.
+    /// Sets the error callback method. Returns previous error callback
+    /// function.
     ///
     /// The funciton is called when an error occures on another thread.
     ///
@@ -155,7 +158,7 @@ impl Sink {
     pub fn on_err_callback(
         &self,
         callback: Box<dyn FnMut(Error) + Send>,
-    ) -> Result<()> {
+    ) -> Result<OptionBox<dyn FnMut(Error) + Send>> {
         self.shared.err_callback().set(callback)
     }
 
@@ -342,10 +345,34 @@ impl Sink {
             })
     }
 
-    /// Sets the fade-in/fade-out time for play/pause
-    pub fn set_fade_len(&mut self, fade: Duration) -> Result<()> {
-        self.shared.controls()?.fade_duration = fade;
-        Ok(())
+    /// Sets the fade-in/fade-out time for play/pause. Returns the previous
+    /// fade length.
+    ///
+    /// # Errors
+    /// - another user of one of the used mutexes panicked while using it
+    /// - source fails to select preferred configuration.
+    ///
+    /// # Panics
+    /// - the current thread already locked one of the used mutexes and didn't
+    ///   release them
+    pub fn set_fade_len(&mut self, fade: Duration) -> Result<Duration> {
+        Ok(mem::replace(
+            &mut self.shared.controls()?.fade_duration,
+            fade,
+        ))
+    }
+
+    /// Gets the current fade-in/fade-out time for play/pause.
+    ///
+    /// # Errors
+    /// - another user of one of the used mutexes panicked while using it
+    /// - source fails to select preferred configuration.
+    ///
+    /// # Panics
+    /// - the current thread already locked one of the used mutexes and didn't
+    ///   release them
+    pub fn get_fade_len(&self) -> Result<Duration> {
+        Ok(self.shared.controls()?.fade_duration)
     }
 
     /// Sets the preferred buffer size. None means, use default size.
@@ -373,12 +400,17 @@ impl Sink {
     }
 
     /// Sets the device to be used. If `device` is [`None`], default device
-    /// will be selected.
+    /// will be selected. Returns the current device.
     ///
     /// This change will be applied the next time that stream will need to
     /// rebuild or by calling [`Self::restart_stream`].
-    pub fn set_device(&mut self, device: Option<Device>) {
-        self.device = device;
+    pub fn set_device(&mut self, device: Option<Device>) -> Option<Device> {
+        mem::replace(&mut self.device, device)
+    }
+
+    /// Gets the currently selected playback device.
+    pub fn get_device(&self) -> &Option<Device> {
+        &self.device
     }
 
     /// Resets the device and restarts the stream. If device is [`None`],
@@ -454,8 +486,7 @@ impl Sink {
         if let Some(src) = &mut src {
             src.set_err_callback(self.shared.err_callback());
         }
-        std::mem::swap(&mut src, &mut *(self.shared.prefeched()?));
-        Ok(src)
+        Ok(mem::replace(&mut *self.shared.prefeched()?, src))
     }
 
     /// Sets how long before source ends should notification about the source

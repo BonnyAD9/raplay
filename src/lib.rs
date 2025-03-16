@@ -57,7 +57,7 @@ pub use self::{
 
 #[cfg(test)]
 mod tests {
-    use std::{fs::File, io::stdin, path::Path, thread, time::Duration};
+    /*use std::{fs::File, io::stdin, path::Path, thread, time::Duration};
 
     use crate::{BufferSize, Sink, err::Error, source::Symph};
 
@@ -102,7 +102,7 @@ mod tests {
             File::open(Path::new(&home_path).join(p))?,
             &Default::default(),
         )?)
-    }
+    }*/
 
     /*#[test]
     fn play_sine() -> Result<()> {
