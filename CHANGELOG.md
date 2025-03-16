@@ -25,7 +25,7 @@
 - `Sink::set_device` now returns the previous device.
 - `Sink::load` now takes `Box<dyn Source>` instead of `impl Source + 'static`.
 - Rename `ChannelConverter` and `RateConverter` to `Channel` and `Rate`.
-- Move contents of namespaces in `converters::*` directly to `converters::*`.
+- Move contents of namespaces in `converters::*` directly to `converters`.
 - Rename `SineSource` to `Sine`.
 - Rename `SymphOptions` to `Options`.
 - Move contents of `raplay::callback` directly to `raplay`.
