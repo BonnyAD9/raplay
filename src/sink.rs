@@ -203,6 +203,25 @@ impl Sink {
         Ok(())
     }
 
+    /// Loads the prefetched source.
+    ///
+    /// # Errors
+    /// - There is no prefetched source.
+    /// - Another user of one of the used mutexes panicked while using it
+    /// - Source fails to select preferred configuration.
+    ///
+    /// # Panics
+    /// - the current thread already locked one of the used mutexes and didn't
+    ///   release them
+    pub fn load_prefetched(&mut self, play: bool) -> Result<()> {
+        let src = self.shared.prefeched()?.take();
+        if let Some(src) = src {
+            self.load(src, play)
+        } else {
+            Err(Error::NoPrefetchedSource)
+        }
+    }
+
     /// Resumes the playback of the current source if `play` is true, otherwise
     /// pauses the playback.
     ///

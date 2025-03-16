@@ -34,6 +34,8 @@ pub enum Error {
     /// Returned when Sink tries to do action on Source, but there is no source
     #[error("Cannot operate on a source because there is no source playing")]
     NoSourceIsPlaying,
+    #[error("Cannot load prefetched source. There is no prefetched source.")]
+    NoPrefetchedSource,
     /// Cpal errors
     #[error(transparent)]
     Cpal(#[from] CpalError),
