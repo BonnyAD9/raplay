@@ -1,5 +1,5 @@
 use std::{
-    sync::Arc,
+    sync::{atomic::Ordering, Arc},
     time::{Duration, Instant},
 };
 
@@ -24,8 +24,6 @@ pub(super) struct Mixer {
     /// The last status of play
     last_play: Option<bool>,
     last_sound: bool,
-    /// If the prefetch callback was sent.
-    prefetched: bool,
     /// Info about the device that is playing
     info: DeviceConfig,
 }
@@ -38,7 +36,6 @@ impl Mixer {
             volume: VolumeIterator::default(),
             last_play: None,
             last_sound: false,
-            prefetched: false,
             info,
         }
     }
@@ -145,7 +142,7 @@ impl Mixer {
         }
 
         {
-            let mut psrc = self.shared.prefeched()?;
+            let mut psrc = self.shared.prefech_notify()?;
 
             let Some(src) = psrc.as_mut() else {
                 silence_sbuf!(data);
@@ -169,9 +166,9 @@ impl Mixer {
             src.init(&self.info)?;
         }
 
-        self.prefetched = false;
+        self.shared.do_prefetch_notify.store(true, Ordering::Relaxed);
 
-        let mut src = self.shared.prefeched()?.take();
+        let mut src = self.shared.prefech_notify()?.take();
 
         let cnt = self.play_source(&mut src, &mut data, &controls)?;
 
@@ -252,7 +249,7 @@ impl Mixer {
         controls: &Controls,
         qcb: Option<CallbackInfo>,
     ) -> Result<()> {
-        let cb = (!self.prefetched && controls.prefetch != Duration::ZERO)
+        let cb = (controls.prefetch != Duration::ZERO && self.shared.do_prefetch_notify.load(Ordering::Relaxed))
             .then(|| {
                 src.as_ref()
                     .and_then(|t| t.get_time())
@@ -265,7 +262,7 @@ impl Mixer {
             self.shared.invoke_callback(cb)?;
         }
         if let Some(t) = cb {
-            self.prefetched = true;
+            self.shared.do_prefetch_notify.store(false, Ordering::Relaxed);
             self.shared.invoke_callback(CallbackInfo::PrefetchTime(t))
         } else {
             Ok(())

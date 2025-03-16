@@ -13,8 +13,8 @@
 - Allow sending notification when source is about to end with
   `Sink::prefetch_notify`.
 - Add option to get current sink device with `Sink::get_device`.
-- Add `Sink::get_fade_len`.
-- Add `Sink::load_prefetched`.
+- Add `Sink::get_fade_len`, `Sink::load_prefetched` and
+  `Sink::do_prefetch_notify`.
 
 ### Breaking changes
 - Remove serde as default feature.

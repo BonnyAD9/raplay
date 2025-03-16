@@ -1,6 +1,6 @@
 use std::{
     mem,
-    sync::Arc,
+    sync::{atomic::Ordering, Arc},
     time::{Duration, Instant},
 };
 
@@ -180,11 +180,14 @@ impl Sink {
         src.set_err_callback(self.shared.err_callback());
 
         let config = src.preferred_config();
-        if self.device.is_none()
+        let new_stream = if self.device.is_none()
             || config.as_ref().map(|c| *c != self.info).unwrap_or_default()
         {
             self.build_out_stream(config)?;
-        }
+            true
+        } else {
+            false
+        };
 
         let mut controls = self.shared.controls()?;
         let mut source = self.shared.source()?;
@@ -193,6 +196,10 @@ impl Sink {
 
         controls.play = play;
         *source = Some(src);
+
+        if !new_stream {
+            self.do_prefetch_notify(true);
+        }
 
         if let Some(s) = &self.stream {
             if play {
@@ -214,7 +221,7 @@ impl Sink {
     /// - the current thread already locked one of the used mutexes and didn't
     ///   release them
     pub fn load_prefetched(&mut self, play: bool) -> Result<()> {
-        let src = self.shared.prefeched()?.take();
+        let src = self.shared.prefech_notify()?.take();
         if let Some(src) = src {
             self.load(src, play)
         } else {
@@ -505,7 +512,7 @@ impl Sink {
         if let Some(src) = &mut src {
             src.set_err_callback(self.shared.err_callback());
         }
-        Ok(mem::replace(&mut *self.shared.prefeched()?, src))
+        Ok(mem::replace(&mut *self.shared.prefech_notify()?, src))
     }
 
     /// Sets how long before source ends should notification about the source
@@ -525,6 +532,14 @@ impl Sink {
     pub fn prefetch_notify(&self, rem: Duration) -> Result<()> {
         self.shared.controls()?.prefetch = rem;
         Ok(())
+    }
+
+    /// true - Makes the source notify of prefetch even if that notification
+    ///        has already been sent.
+    ///
+    /// false - Don't sent notify for the current source.
+    pub fn do_prefetch_notify(&self, val: bool) {
+        self.shared.do_prefetch_notify.store(val, Ordering::Relaxed);
     }
 }
 
