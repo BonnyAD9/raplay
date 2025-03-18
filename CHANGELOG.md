@@ -1,6 +1,14 @@
 # Changelog
 
-## future
+## v0.4.1
+### New features
+- Add `Sink::try_load`.
+
+### Changes
+- `Sink::load_prefetched` will now never drop the prefetched source. It will be
+  either loaded or will stay as prefetch if it fails.
+
+## v0.4.0
 ### New features
 - Add debug implementation to majority of structs.
 - Add option to get removed callback functions with `Sink::take_callback` and

@@ -174,12 +174,35 @@ impl Sink {
     ///   release them
     pub fn load(
         &mut self,
-        mut src: Box<dyn Source>,
+        src: Box<dyn Source>,
         play: bool,
     ) -> Result<()> {
-        src.set_err_callback(self.shared.err_callback());
+        self.try_load(&mut Some(src), play)
+    }
 
-        let config = src.preferred_config();
+    /// Tries to load the given source. If loading of the source fails, it is
+    /// not taken. If it it succeeds, it will be removed from the option.
+    ///
+    /// `src` MUST NOT BE [`None`].
+    ///
+    /// There is option where this will return error, but the source will be
+    /// taken. In that case the source is not dropped, but already loaded
+    /// internaly and the operation can be retried by calling [`Self::play`].
+    ///
+    /// # Errors
+    /// - another user of one of the used mutexes panicked while using it
+    /// - source fails to select preferred configuration.
+    ///
+    /// # Panics
+    /// - `src` was [`None`].
+    /// - the current thread already locked one of the used mutexes and didn't
+    ///   release them
+    pub fn try_load(&mut self, src: &mut Option<Box<dyn Source>>, play: bool) -> Result<()> {
+        let srcr = src.as_mut().expect("Sink::try_load() called with None");
+
+        srcr.set_err_callback(self.shared.err_callback());
+
+        let config = srcr.preferred_config();
         let new_stream = if self.device.is_none()
             || config.as_ref().map(|c| *c != self.info).unwrap_or_default()
         {
@@ -192,10 +215,10 @@ impl Sink {
         let mut controls = self.shared.controls()?;
         let mut source = self.shared.source()?;
 
-        src.init(&self.info)?;
+        srcr.init(&self.info)?;
 
         controls.play = play;
-        *source = Some(src);
+        *source = src.take();
 
         if !new_stream {
             self.do_prefetch_notify(true);
@@ -223,7 +246,12 @@ impl Sink {
     pub fn load_prefetched(&mut self, play: bool) -> Result<()> {
         let src = self.shared.prefech_notify()?.take();
         if let Some(src) = src {
-            self.load(src, play)
+            let mut src = Some(src);
+            let res = self.try_load(&mut src, play);
+            if src.is_some() {
+                *self.shared.prefech_notify()? = src;
+            }
+            res
         } else {
             Err(Error::NoPrefetchedSource)
         }
