@@ -68,8 +68,8 @@ mod tests {
     fn play_audio() -> Result<()> {
         let mut sink = Sink::default();
         sink.on_callback(Box::new(|c| eprintln!("callback: {c:?}")))?;
-        sink.on_err_callback(Box::new(|e: Error| eprintln!("err: {}", e)))?;
-        sink.volume(0.3 * 0.3)?;
+        sink.on_err_callback(Box::new(|e: Error| eprintln!("err: {:?}", e)))?;
+        sink.volume(0.1 * 0.1)?;
         sink.prefetch_notify(Duration::from_secs(1))?;
 
         let src = open_symph("music/4tet - 4th -03 Air.mp3")?;

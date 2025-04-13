@@ -1,6 +1,6 @@
 use std::{
     fmt::Debug,
-    sync::{atomic::AtomicBool, Mutex, MutexGuard},
+    sync::{Mutex, MutexGuard, atomic::AtomicBool},
 };
 
 use crate::{Callback, CallbackInfo, Controls, Error, Result, Source};
@@ -12,9 +12,9 @@ pub struct SharedData {
     /// The source for the audio
     source: Mutex<Option<Box<dyn Source>>>,
     /// Prefetched source that will play next.
-    prefetch_notify: Mutex<Option<Box<dyn Source>>>,
+    prefetch_src: Mutex<Option<Box<dyn Source>>>,
     /// True if the prefetch notify is yet to be sent.
-    pub(super) do_prefetch_notify: AtomicBool,
+    pub(super) prefetch_notify: AtomicBool,
     /// Function used as callback from the playback loop on events
     callback: Callback<CallbackInfo>,
     /// Function used as callback when errors occur on the playback loop
@@ -27,8 +27,8 @@ impl SharedData {
         Self {
             controls: Mutex::new(Controls::new()),
             source: Mutex::new(None),
-            prefetch_notify: Mutex::new(None),
-            do_prefetch_notify: true.into(),
+            prefetch_src: Mutex::new(None),
+            prefetch_notify: true.into(),
             callback: Callback::default(),
             err_callback: Callback::default(),
         }
@@ -46,10 +46,10 @@ impl SharedData {
         Ok(self.source.lock()?)
     }
 
-    pub(super) fn prefech_notify(
+    pub(super) fn prefech_src(
         &self,
     ) -> Result<MutexGuard<'_, Option<Box<dyn Source>>>> {
-        Ok(self.prefetch_notify.lock()?)
+        Ok(self.prefetch_src.lock()?)
     }
 
     /// Invokes callback function

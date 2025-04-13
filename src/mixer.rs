@@ -1,5 +1,5 @@
 use std::{
-    sync::{atomic::Ordering, Arc},
+    sync::{Arc, atomic::Ordering},
     time::{Duration, Instant},
 };
 
@@ -131,18 +131,19 @@ impl Mixer {
         data: &mut SampleBufferMut,
         controls: Controls,
     ) -> Result<()> {
-        let mut src = self.shared.source()?.take();
+        let shared = self.shared.clone();
+        let mut src = shared.source()?;
 
         let cnt = self.play_source(&mut src, data, &controls)?;
 
         let mut data = slice_sbuf!(data, cnt..);
 
         if data.is_empty() {
-            return self.check_prefetch_callback(src, &controls, None);
+            return self.check_prefetch_callback(&src, &controls, None);
         }
 
         {
-            let mut psrc = self.shared.prefech_notify()?;
+            let mut psrc = self.shared.prefech_src()?;
 
             let Some(src) = psrc.as_mut() else {
                 silence_sbuf!(data);
@@ -166,9 +167,9 @@ impl Mixer {
             src.init(&self.info)?;
         }
 
-        self.shared.do_prefetch_notify.store(true, Ordering::Relaxed);
+        self.shared.prefetch_notify.store(true, Ordering::Relaxed);
 
-        let mut src = self.shared.prefech_notify()?.take();
+        *src = self.shared.prefech_src()?.take();
 
         let cnt = self.play_source(&mut src, &mut data, &controls)?;
 
@@ -184,7 +185,7 @@ impl Mixer {
             ))
         } else {
             self.check_prefetch_callback(
-                src,
+                &src,
                 &controls,
                 Some(CallbackInfo::SourceEnded(
                     PrefetchState::PrefetchSuccessful,
@@ -199,6 +200,8 @@ impl Mixer {
         data: &mut SampleBufferMut,
         controls: &Controls,
     ) -> Result<usize> {
+        // DO NOT ACCESS shared.source()
+
         match src.as_mut() {
             Some(s) => self.play_source_inner(s, data, controls),
             None => Ok(0),
@@ -211,6 +214,8 @@ impl Mixer {
         data: &mut SampleBufferMut,
         controls: &Controls,
     ) -> Result<usize> {
+        // DO NOT ACCESS shared.source()
+
         let supports_volume = src.volume(self.volume);
 
         let (cnt, e) = src.read(data);
@@ -245,24 +250,26 @@ impl Mixer {
     /// `src`.
     fn check_prefetch_callback(
         &mut self,
-        src: Option<Box<dyn Source>>,
+        src: &Option<Box<dyn Source>>,
         controls: &Controls,
         qcb: Option<CallbackInfo>,
     ) -> Result<()> {
-        let cb = (controls.prefetch != Duration::ZERO && self.shared.do_prefetch_notify.load(Ordering::Relaxed))
-            .then(|| {
-                src.as_ref()
-                    .and_then(|t| t.get_time())
-                    .map(|ts| ts.total - ts.current)
-                    .and_then(|t| (t <= controls.prefetch).then_some(t))
-            })
-            .flatten();
-        *(self.shared.source()?) = src;
+        // DO NOT ACCESS shared.source()
+
+        let cb = (controls.prefetch != Duration::ZERO
+            && self.shared.prefetch_notify.load(Ordering::Relaxed))
+        .then(|| {
+            src.as_ref()
+                .and_then(|t| t.get_time())
+                .map(|ts| ts.total - ts.current)
+                .and_then(|t| (t <= controls.prefetch).then_some(t))
+        })
+        .flatten();
         if let Some(cb) = qcb {
             self.shared.invoke_callback(cb)?;
         }
         if let Some(t) = cb {
-            self.shared.do_prefetch_notify.store(false, Ordering::Relaxed);
+            self.shared.prefetch_notify.store(false, Ordering::Relaxed);
             self.shared.invoke_callback(CallbackInfo::PrefetchTime(t))
         } else {
             Ok(())

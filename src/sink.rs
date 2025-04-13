@@ -1,6 +1,6 @@
 use std::{
     mem,
-    sync::{atomic::Ordering, Arc},
+    sync::{Arc, atomic::Ordering},
     time::{Duration, Instant},
 };
 
@@ -172,11 +172,7 @@ impl Sink {
     /// # Panics
     /// - the current thread already locked one of the used mutexes and didn't
     ///   release them
-    pub fn load(
-        &mut self,
-        src: Box<dyn Source>,
-        play: bool,
-    ) -> Result<()> {
+    pub fn load(&mut self, src: Box<dyn Source>, play: bool) -> Result<()> {
         self.try_load(&mut Some(src), play)
     }
 
@@ -197,7 +193,11 @@ impl Sink {
     /// - `src` was [`None`].
     /// - the current thread already locked one of the used mutexes and didn't
     ///   release them
-    pub fn try_load(&mut self, src: &mut Option<Box<dyn Source>>, play: bool) -> Result<()> {
+    pub fn try_load(
+        &mut self,
+        src: &mut Option<Box<dyn Source>>,
+        play: bool,
+    ) -> Result<()> {
         let srcr = src.as_mut().expect("Sink::try_load() called with None");
 
         srcr.set_err_callback(self.shared.err_callback());
@@ -244,12 +244,12 @@ impl Sink {
     /// - the current thread already locked one of the used mutexes and didn't
     ///   release them
     pub fn load_prefetched(&mut self, play: bool) -> Result<()> {
-        let src = self.shared.prefech_notify()?.take();
+        let src = self.shared.prefech_src()?.take();
         if let Some(src) = src {
             let mut src = Some(src);
             let res = self.try_load(&mut src, play);
             if src.is_some() {
-                *self.shared.prefech_notify()? = src;
+                *self.shared.prefech_src()? = src;
             }
             res
         } else {
@@ -540,7 +540,7 @@ impl Sink {
         if let Some(src) = &mut src {
             src.set_err_callback(self.shared.err_callback());
         }
-        Ok(mem::replace(&mut *self.shared.prefech_notify()?, src))
+        Ok(mem::replace(&mut *self.shared.prefech_src()?, src))
     }
 
     /// Sets how long before source ends should notification about the source
@@ -567,7 +567,7 @@ impl Sink {
     ///
     /// false - Don't sent notify for the current source.
     pub fn do_prefetch_notify(&self, val: bool) {
-        self.shared.do_prefetch_notify.store(val, Ordering::Relaxed);
+        self.shared.prefetch_notify.store(val, Ordering::Relaxed);
     }
 }
 

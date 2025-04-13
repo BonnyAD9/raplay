@@ -1,5 +1,9 @@
 # Changelog
 
+## future
+### Fixes
+- Fix false errors `NoSourceIsPlaying` that could occur at specific timings.
+
 ## v0.4.1
 ### New features
 - Add `Sink::try_load`.
