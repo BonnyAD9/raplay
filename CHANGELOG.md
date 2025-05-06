@@ -1,6 +1,6 @@
 # Changelog
 
-## future
+## v0.4.2
 ### Fixes
 - Fix false errors `NoSourceIsPlaying` that could occur at specific timings.
 
