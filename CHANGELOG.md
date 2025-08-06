@@ -1,5 +1,10 @@
 # Changelog
 
+## future
+### Fixes
+- Fix repeatedly sending `SourceEnded` when source ends. Now it is sent only
+  once and than is repeatedly sent `NoSource`.
+
 ## v0.4.2
 ### Fixes
 - Fix false errors `NoSourceIsPlaying` that could occur at specific timings.

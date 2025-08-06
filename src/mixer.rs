@@ -145,18 +145,19 @@ impl Mixer {
         {
             let mut psrc = self.shared.prefech_src()?;
 
-            let Some(src) = psrc.as_mut() else {
+            let Some(src2) = psrc.as_mut() else {
                 silence_sbuf!(data);
                 return if src.is_none() {
                     self.shared.invoke_callback(CallbackInfo::NoSource)
                 } else {
+                    *src = None;
                     self.shared.invoke_callback(CallbackInfo::SourceEnded(
                         PrefetchState::NoPrefetch,
                     ))
                 };
             };
 
-            let cfg = src.preferred_config();
+            let cfg = src2.preferred_config();
 
             if cfg.is_some() && cfg.as_ref() != Some(&self.info) {
                 return self.shared.invoke_callback(
@@ -164,12 +165,12 @@ impl Mixer {
                 );
             }
 
-            src.init(&self.info)?;
+            src2.init(&self.info)?;
+            
+            *src = psrc.take();
         }
 
         self.shared.prefetch_notify.store(true, Ordering::Relaxed);
-
-        *src = self.shared.prefech_src()?.take();
 
         let cnt = self.play_source(&mut src, &mut data, &controls)?;
 
@@ -177,6 +178,7 @@ impl Mixer {
 
         if !data.is_empty() {
             silence_sbuf!(data);
+            *src = None;
             self.shared.invoke_callback(CallbackInfo::SourceEnded(
                 PrefetchState::PrefetchSuccessful,
             ))?;
