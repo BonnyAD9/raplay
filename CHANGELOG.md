@@ -1,6 +1,6 @@
 # Changelog
 
-## future
+## v0.4.3
 ### Fixes
 - Fix repeatedly sending `SourceEnded` when source ends. Now it is sent only
   once and than is repeatedly sent `NoSource`.
