@@ -1,7 +1,8 @@
 # raplay
 Library for playing audio.
 
-The library is very new and not much tested.
+The library is not tested systematically, but I have been using daily in my
+music player for years and I'm not aware of any unexpected problems.
 
 ## Features
 - Play(Resume)/Pause
@@ -11,6 +12,7 @@ The library is very new and not much tested.
 - Seeking
 - Get audio position and length
 - Fade-in/fade-out on play/pause
+- Gapless playback with prefetching of the next source.
 
 ## Supported formats
 All the decoding is done by
@@ -43,7 +45,7 @@ sink.load(Box::new(src), true); // Play the mp3 file
 ```
 
 ## Known issues
-- If the device doesn't support the required sample rate, aliasing may occur
+- If the device doesn't support the required sample rate, aliasing may occur.
 
 ## How to get it
 It is available on [crates.io](https://crates.io/crates/raplay)
