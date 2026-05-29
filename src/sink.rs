@@ -275,7 +275,7 @@ impl Sink {
     /// Pauses the loop that is feeding new samples. This can be used to reduce
     /// cpu usage, but it is very different from the normal pause.
     ///
-    /// It doesn't ignores fade play/pause.
+    /// It ignores fade play/pause.
     pub fn hard_pause(&self) -> Result<()> {
         if let Some(s) = &self.stream {
             s.pause()?;
