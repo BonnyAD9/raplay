@@ -1,3 +1,5 @@
+pub use cpal::I24;
+
 /// Buffer of samples, this is enum that contains the possible types
 /// of samples in a buffer
 #[non_exhaustive]
@@ -9,6 +11,9 @@ pub enum SampleBufferMut<'a> {
     /// `i16` with a valid range of 'u16::MIN..=u16::MAX' with `0` being the
     /// origin
     I16(&'a mut [i16]),
+    /// `I24` with a valid range of 'I24::MIN..=I24::MAX' with `0` being the
+    /// origin
+    I24(&'a mut [I24]),
     /// `i32` with a valid range of 'u32::MIN..=u32::MAX' with `0` being the
     /// origin
     I32(&'a mut [i32]),
@@ -41,6 +46,7 @@ macro_rules! operate_samples {
         match $buf {
             SampleBufferMut::I8($id) => $op,
             SampleBufferMut::I16($id) => $op,
+            SampleBufferMut::I24($id) => $op,
             SampleBufferMut::I32($id) => $op,
             SampleBufferMut::I64($id) => $op,
             SampleBufferMut::U8($id) => $op,
@@ -64,6 +70,7 @@ macro_rules! slice_sbuf {
         match $buf {
             SampleBufferMut::I8(d) => SampleBufferMut::I8(&mut d[$range]),
             SampleBufferMut::I16(d) => SampleBufferMut::I16(&mut d[$range]),
+            SampleBufferMut::I24(d) => SampleBufferMut::I24(&mut d[$range]),
             SampleBufferMut::I32(d) => SampleBufferMut::I32(&mut d[$range]),
             SampleBufferMut::I64(d) => SampleBufferMut::I64(&mut d[$range]),
             SampleBufferMut::U8(d) => SampleBufferMut::U8(&mut d[$range]),

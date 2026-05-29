@@ -154,11 +154,11 @@ impl Source for Symph {
             sample_format: match dec {
                 GenericAudioBufferRef::U8(_) => SampleFormat::U8,
                 GenericAudioBufferRef::U16(_) => SampleFormat::U16,
-                GenericAudioBufferRef::U24(_) => SampleFormat::F32,
+                GenericAudioBufferRef::U24(_) => SampleFormat::I24,
                 GenericAudioBufferRef::U32(_) => SampleFormat::U32,
                 GenericAudioBufferRef::S8(_) => SampleFormat::I8,
                 GenericAudioBufferRef::S16(_) => SampleFormat::I16,
-                GenericAudioBufferRef::S24(_) => SampleFormat::F32,
+                GenericAudioBufferRef::S24(_) => SampleFormat::I24,
                 GenericAudioBufferRef::S32(_) => SampleFormat::I32,
                 GenericAudioBufferRef::F32(_) => SampleFormat::F32,
                 GenericAudioBufferRef::F64(_) => SampleFormat::F32,

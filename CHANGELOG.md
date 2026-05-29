@@ -5,6 +5,9 @@
 - Because of the update to newer symhonia version, the configuration of the
   symphonia source has changed.
 
+### New features
+- Allow direct playback of signed 24 bit samples.
+
 ### Changes
 - Update to version 0.6.0 of symphonia.
 

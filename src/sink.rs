@@ -5,8 +5,8 @@ use std::{
 };
 
 use cpal::{
-    Device, Devices, OutputCallbackInfo, SampleFormat, SampleRate, Stream,
-    SupportedOutputConfigs, SupportedStreamConfig,
+    Device, Devices, I24, OutputCallbackInfo, SampleFormat, SampleRate,
+    Stream, SupportedOutputConfigs, SupportedStreamConfig,
     traits::{DeviceTrait, HostTrait, StreamTrait},
 };
 
@@ -99,6 +99,7 @@ impl Sink {
         let stream = match self.info.sample_format {
             SampleFormat::I8 => arm!(i8, I8),
             SampleFormat::I16 => arm!(i16, I16),
+            SampleFormat::I24 => arm!(I24, I24),
             SampleFormat::I32 => arm!(i32, I32),
             SampleFormat::I64 => arm!(i64, I64),
             SampleFormat::U8 => arm!(u8, U8),
