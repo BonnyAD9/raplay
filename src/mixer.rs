@@ -166,7 +166,7 @@ impl Mixer {
             }
 
             src2.init(&self.info)?;
-            
+
             *src = psrc.take();
         }
 

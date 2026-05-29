@@ -1,5 +1,13 @@
 # Changelog
 
+## future
+### Breaking changes
+- Because of the update to newer symhonia version, the configuration of the
+  symphonia source has changed.
+
+### Changes
+- Update to version 0.6.0 of symphonia.
+
 ## v0.4.3
 ### Fixes
 - Fix repeatedly sending `SourceEnded` when source ends. Now it is sent only

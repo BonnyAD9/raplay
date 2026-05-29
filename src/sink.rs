@@ -224,10 +224,8 @@ impl Sink {
             self.do_prefetch_notify(true);
         }
 
-        if let Some(s) = &self.stream {
-            if play {
-                s.play()?;
-            }
+        if play && let Some(s) = &self.stream {
+            s.play()?;
         }
 
         Ok(())

@@ -8,19 +8,16 @@ use std::{fmt::Debug, time::Duration};
 use cpal::{I24, SampleFormat, U24};
 use symphonia::{
     core::{
-        audio::AudioBufferRef,
-        codecs::Decoder,
-        formats::{SeekMode, SeekTo},
+        audio::{Audio, GenericAudioBufferRef, sample::Sample},
+        codecs::{CodecParameters, audio::AudioDecoder},
+        formats::{FormatReader, SeekMode, SeekTo, TrackType},
         io::{MediaSource, MediaSourceStream, MediaSourceStreamOptions},
-        probe::ProbeResult,
-        sample::Sample,
-        units::Time,
+        units::{self, Time, TimeBase, Timestamp},
     },
     default::{get_codecs, get_probe},
 };
 
 use crate::{
-    Timestamp,
     callback::Callback,
     converters::{UniSample, do_channels_rate, interleave},
     err as cerr, operate_samples,
@@ -40,17 +37,21 @@ pub struct Symph {
     /// Number of channels of the decoded audio
     source_channels: u32,
     /// The probe for the audio
-    probed: ProbeResult,
+    probed: Box<dyn FormatReader>,
     /// The decoder for the audio
-    decoder: Box<dyn Decoder>,
+    decoder: Box<dyn AudioDecoder>,
     /// The track of the file that is played
     track_id: u32,
+    /// Time base of the track.
+    time_base: Option<TimeBase>,
+    /// Total duration of the track.
+    duration: Option<units::Duration>,
     /// Index into the buffer, where to start reading next samples
     buffer_start: Option<usize>,
     /// Yelds multiplier for each sample
     volume: VolumeIterator,
     /// The timestamp of the last frame
-    last_ts: u64,
+    last_ts: Timestamp,
     /// Error callback for recoverable errors.
     err_callback: Callback<cerr::Error>,
 }
@@ -72,21 +73,29 @@ impl Symph {
         );
 
         let pres = get_probe()
-            .format(
+            .probe(
                 &Default::default(),
                 stream,
-                &opt.format,
-                &Default::default(),
+                opt.format.clone(),
+                Default::default(),
             )
             .map_err(Error::SymphInner)?;
 
         // TODO: select other track if the default is unavailable
-        let track =
-            pres.format.default_track().ok_or(Error::CantSelectTrack)?;
+        let track = pres
+            .default_track(TrackType::Audio)
+            .ok_or(Error::CantSelectTrack)?;
         let track_id = track.id;
+        let time_base = track.time_base;
+        let duration = track
+            .duration
+            .or(track.num_frames.map(units::Duration::new));
+        let Some(CodecParameters::Audio(params)) = &track.codec_params else {
+            return Err(Error::CantSelectTrack.into());
+        };
 
         let decoder = get_codecs()
-            .make(&track.codec_params, &Default::default())
+            .make_audio_decoder(params, &opt.decoder)
             .map_err(Error::SymphInner)?;
 
         Ok(Symph {
@@ -97,9 +106,11 @@ impl Symph {
             probed: pres,
             decoder,
             track_id,
+            time_base,
+            duration,
             buffer_start: None,
             volume: VolumeIterator::constant(1.),
-            last_ts: 0,
+            last_ts: Timestamp::ZERO,
             err_callback: Callback::default(),
         })
     }
@@ -130,7 +141,7 @@ impl Source for Symph {
         let mut dec = self.decoder.last_decoded();
         let mut spec = dec.spec();
 
-        if spec.rate == 0 && dec.frames() == 0 {
+        if spec.rate() == 0 && dec.frames() == 0 {
             self.decode_packet().ok()?;
             self.buffer_start = Some(0);
             dec = self.decoder.last_decoded();
@@ -138,19 +149,19 @@ impl Source for Symph {
         }
 
         Some(DeviceConfig {
-            channel_count: spec.channels.count() as u32,
-            sample_rate: spec.rate,
+            channel_count: spec.channels().count() as u32,
+            sample_rate: spec.rate(),
             sample_format: match dec {
-                AudioBufferRef::U8(_) => SampleFormat::U8,
-                AudioBufferRef::U16(_) => SampleFormat::U16,
-                AudioBufferRef::U24(_) => SampleFormat::F32,
-                AudioBufferRef::U32(_) => SampleFormat::U32,
-                AudioBufferRef::S8(_) => SampleFormat::I8,
-                AudioBufferRef::S16(_) => SampleFormat::I16,
-                AudioBufferRef::S24(_) => SampleFormat::F32,
-                AudioBufferRef::S32(_) => SampleFormat::I32,
-                AudioBufferRef::F32(_) => SampleFormat::F32,
-                AudioBufferRef::F64(_) => SampleFormat::F32,
+                GenericAudioBufferRef::U8(_) => SampleFormat::U8,
+                GenericAudioBufferRef::U16(_) => SampleFormat::U16,
+                GenericAudioBufferRef::U24(_) => SampleFormat::F32,
+                GenericAudioBufferRef::U32(_) => SampleFormat::U32,
+                GenericAudioBufferRef::S8(_) => SampleFormat::I8,
+                GenericAudioBufferRef::S16(_) => SampleFormat::I16,
+                GenericAudioBufferRef::S24(_) => SampleFormat::F32,
+                GenericAudioBufferRef::S32(_) => SampleFormat::I32,
+                GenericAudioBufferRef::F32(_) => SampleFormat::F32,
+                GenericAudioBufferRef::F64(_) => SampleFormat::F32,
             },
         })
     }
@@ -160,29 +171,15 @@ impl Source for Symph {
         true
     }
 
-    fn seek(&mut self, time: Duration) -> anyhow::Result<Timestamp> {
-        let par = self.decoder.codec_params();
-        let time = Time::new(
-            time.as_secs(),
-            time.as_secs_f64() - time.as_secs_f64().trunc(),
-        );
+    fn seek(&mut self, time: Duration) -> anyhow::Result<crate::Timestamp> {
+        let time = duration_to_time(time).ok_or(Error::TooLargeDuration)?;
 
-        let seek_to = if let (Some(time_base), Some(max)) =
-            (par.time_base, par.n_frames)
-        {
-            let ts = time_base.calc_timestamp(time);
-            SeekTo::TimeStamp {
-                ts: ts.min(max - 1),
-                track_id: self.track_id,
-            }
-        } else {
-            SeekTo::Time {
-                time,
-                track_id: Some(self.track_id),
-            }
+        let seek_to = SeekTo::Time {
+            time,
+            track_id: Some(self.track_id),
         };
 
-        let pos = self.probed.format.seek(SeekMode::Coarse, seek_to)?;
+        let pos = self.probed.seek(SeekMode::Coarse, seek_to)?;
 
         self.buffer_start = None;
         self.last_ts = pos.actual_ts;
@@ -190,27 +187,26 @@ impl Source for Symph {
             .ok_or(cerr::Error::CannotDetermineTimestamp.into())
     }
 
-    fn get_time(&self) -> Option<Timestamp> {
-        let par = self.decoder.codec_params();
+    fn get_time(&self) -> Option<crate::Timestamp> {
+        let tb = self.time_base?;
 
-        if let Some(time_base) = par.time_base {
-            let cur = time_base.calc_time(self.last_ts);
+        let cur = tb.calc_time_saturating(self.last_ts);
 
-            let total = if let Some(f) = par.n_frames {
-                time_base.calc_time(f)
-            } else {
-                cur
-            };
-
-            Some(Timestamp::new(
-                Duration::from_secs(cur.seconds)
-                    + Duration::from_secs_f64(cur.frac),
-                Duration::from_secs(total.seconds)
-                    + Duration::from_secs_f64(total.frac),
+        let total = if let Some(f) = self.duration {
+            tb.calc_time_saturating(Timestamp::new(
+                0i64.saturating_add_unsigned(f.get()),
             ))
         } else {
-            None
-        }
+            cur
+        };
+
+        let (cs, cn) = cur.parts();
+        let (ts, tn) = total.parts();
+
+        Some(crate::Timestamp::new(
+            Duration::new(0u64.saturating_add_signed(cs), cn),
+            Duration::new(0u64.saturating_add_signed(ts), tn),
+        ))
     }
 }
 
@@ -235,7 +231,8 @@ impl Symph {
 
         while !buffer.is_empty() {
             match self.decode_packet() {
-                Ok(_) => {}
+                Ok(true) => {}
+                Ok(false) => return (readed, Ok(())),
                 Err(e) => return (readed, Err(e)),
             }
 
@@ -248,17 +245,18 @@ impl Symph {
     }
 
     /// Decodes the next packet
-    fn decode_packet(&mut self) -> Result<(), Error> {
+    fn decode_packet(&mut self) -> Result<bool, Error> {
         loop {
             let packet = loop {
-                match self.probed.format.next_packet() {
-                    Ok(p) => {
-                        if p.track_id() != self.track_id {
+                match self.probed.next_packet() {
+                    Ok(Some(p)) => {
+                        if p.track_id != self.track_id {
                             continue;
                         }
-                        self.last_ts = p.ts;
+                        self.last_ts = p.pts;
                         break p;
                     }
+                    Ok(None) => return Ok(false),
                     Err(symphonia::core::errors::Error::ResetRequired) => {
                         self.decoder.reset()
                     }
@@ -268,9 +266,10 @@ impl Symph {
 
             break match self.decoder.decode(&packet) {
                 Ok(d) => {
-                    self.source_sample_rate = d.spec().rate;
-                    self.source_channels = d.spec().channels.count() as u32;
-                    Ok(())
+                    let spec = d.spec();
+                    self.source_sample_rate = spec.rate();
+                    self.source_channels = spec.channels().count() as u32;
+                    Ok(true)
                 }
                 // Try to recover from recoverable errors.
                 Err(symphonia::core::errors::Error::ResetRequired) => continue,
@@ -310,7 +309,7 @@ impl Symph {
                 let mut len = 0;
                 let mut last_index = 0;
                 for s in do_channels_rate(
-                    interleave($src.planes().planes().iter().map(|i| {
+                    interleave($src.iter_planes().map(|i| {
                         let slice =
                             &i[start / self.source_channels as usize..];
                         len += slice.len();
@@ -342,20 +341,20 @@ impl Symph {
         }
 
         match samples {
-            AudioBufferRef::U8(src) => arm!(s, *s, src),
-            AudioBufferRef::U16(src) => arm!(s, *s, src),
-            AudioBufferRef::U24(src) => {
+            GenericAudioBufferRef::U8(src) => arm!(s, *s, src),
+            GenericAudioBufferRef::U16(src) => arm!(s, *s, src),
+            GenericAudioBufferRef::U24(src) => {
                 arm!(s, U24::new(s.clamped().0 as i32).unwrap(), src)
             }
-            AudioBufferRef::U32(src) => arm!(s, *s, src),
-            AudioBufferRef::S8(src) => arm!(s, *s, src),
-            AudioBufferRef::S16(src) => arm!(s, *s, src),
-            AudioBufferRef::S24(src) => {
+            GenericAudioBufferRef::U32(src) => arm!(s, *s, src),
+            GenericAudioBufferRef::S8(src) => arm!(s, *s, src),
+            GenericAudioBufferRef::S16(src) => arm!(s, *s, src),
+            GenericAudioBufferRef::S24(src) => {
                 arm!(s, I24::new(s.clamped().0).unwrap(), src)
             }
-            AudioBufferRef::S32(src) => arm!(s, *s, src),
-            AudioBufferRef::F32(src) => arm!(s, *s, src),
-            AudioBufferRef::F64(src) => arm!(s, *s, src),
+            GenericAudioBufferRef::S32(src) => arm!(s, *s, src),
+            GenericAudioBufferRef::F32(src) => arm!(s, *s, src),
+            GenericAudioBufferRef::F64(src) => arm!(s, *s, src),
         }
 
         i
@@ -376,4 +375,8 @@ impl Debug for Symph {
             .field("err_callback", &self.err_callback)
             .finish()
     }
+}
+
+fn duration_to_time(dur: Duration) -> Option<Time> {
+    Time::try_new(dur.as_secs().try_into().ok()?, dur.subsec_nanos())
 }
