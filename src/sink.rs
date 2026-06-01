@@ -5,8 +5,8 @@ use std::{
 };
 
 use cpal::{
-    Device, Devices, I24, OutputCallbackInfo, SampleFormat, SampleRate,
-    Stream, SupportedOutputConfigs, SupportedStreamConfig,
+    Device, Devices, I24, OutputCallbackInfo, SampleFormat, Stream,
+    SupportedOutputConfigs, SupportedStreamConfig,
     traits::{DeviceTrait, HostTrait, StreamTrait},
 };
 
@@ -65,7 +65,7 @@ impl Sink {
 
         self.info = DeviceConfig {
             channel_count: supported_config.channels() as u32,
-            sample_rate: supported_config.sample_rate().0,
+            sample_rate: supported_config.sample_rate(),
             sample_format: supported_config.sample_format(),
         };
 
@@ -75,7 +75,7 @@ impl Sink {
         let mut config = supported_config.config();
         config.buffer_size = self
             .preferred_buffer_size
-            .to_cpal(supported_config.buffer_size(), config.sample_rate.0);
+            .to_cpal(supported_config.buffer_size(), config.sample_rate);
 
         macro_rules! arm {
             ($t:ident, $e:ident) => {
@@ -594,8 +594,8 @@ fn select_config(
     let mut selected = None;
 
     for c in configs {
-        if c.min_sample_rate().0 <= prefered.sample_rate
-            && c.max_sample_rate().0 >= prefered.sample_rate
+        if c.min_sample_rate() <= prefered.sample_rate
+            && c.max_sample_rate() >= prefered.sample_rate
         {
             if c.channels() as u32 == prefered.channel_count {
                 if c.sample_format() == prefered.sample_format {
@@ -613,7 +613,7 @@ fn select_config(
         }
     }
 
-    selected.map(|s| s.with_sample_rate(SampleRate(prefered.sample_rate)))
+    selected.map(|s| s.with_sample_rate(prefered.sample_rate))
 }
 
 impl std::fmt::Debug for Sink {
