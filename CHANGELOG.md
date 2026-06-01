@@ -1,6 +1,6 @@
 # Changelog
 
-## future
+## v0.5.0
 ### Breaking changes
 - Because of the update to newer symhonia version, the configuration of the
   symphonia source has changed.
