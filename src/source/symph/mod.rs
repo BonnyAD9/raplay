@@ -1,14 +1,15 @@
 mod err;
 mod options;
+mod planes_transmute;
 
 pub use self::{err::*, options::*};
 
 use std::{fmt::Debug, time::Duration};
 
-use cpal::{I24, SampleFormat, U24};
+use cpal::SampleFormat;
 use symphonia::{
     core::{
-        audio::{Audio, GenericAudioBufferRef, sample::Sample},
+        audio::GenericAudioBufferRef,
         codecs::{CodecParameters, audio::AudioDecoder},
         formats::{FormatReader, SeekMode, SeekTo, TrackType},
         io::{MediaSource, MediaSourceStream, MediaSourceStreamOptions},
@@ -19,23 +20,20 @@ use symphonia::{
 
 use crate::{
     callback::Callback,
-    converters::{UniSample, do_channels_rate, interleave},
+    converters::{Convert, UniSample},
     err as cerr, operate_samples,
     sample_buffer::SampleBufferMut,
+    source::symph::planes_transmute::PlanesTransmute,
 };
 
 use super::{DeviceConfig, Source, VolumeIterator};
 
 /// Source that decodes audio using symphonia decoder
 pub struct Symph {
-    /// The sample rate of the device
-    target_sample_rate: u32,
-    /// The channel count of the device
-    target_channels: u32,
-    /// The sample rate of the decoded audio
-    source_sample_rate: u32,
-    /// Number of channels of the decoded audio
-    source_channels: u32,
+    /// Output sample format to request.
+    sample_format: Option<SampleFormat>,
+    /// Converter for channels, rate, types and volume.
+    convert: Convert,
     /// The probe for the audio
     probed: Box<dyn FormatReader>,
     /// The decoder for the audio
@@ -48,8 +46,6 @@ pub struct Symph {
     duration: Option<units::Duration>,
     /// Index into the buffer, where to start reading next samples
     buffer_start: Option<usize>,
-    /// Yelds multiplier for each sample
-    volume: VolumeIterator,
     /// The timestamp of the last frame
     last_ts: Timestamp,
     /// Error callback for recoverable errors.
@@ -99,17 +95,14 @@ impl Symph {
             .map_err(Error::SymphInner)?;
 
         Ok(Symph {
-            target_sample_rate: 0,
-            target_channels: 0,
-            source_channels: 0,
-            source_sample_rate: 0,
+            sample_format: opt.sample_format,
+            convert: Convert::default(),
             probed: pres,
             decoder,
             track_id,
             time_base,
             duration,
             buffer_start: None,
-            volume: VolumeIterator::constant(1.),
             last_ts: Timestamp::ZERO,
             err_callback: Callback::default(),
         })
@@ -122,8 +115,8 @@ impl Source for Symph {
     }
 
     fn init(&mut self, info: &DeviceConfig) -> anyhow::Result<()> {
-        self.target_sample_rate = info.sample_rate;
-        self.target_channels = info.channel_count;
+        self.convert.set_dst_channels(info.channel_count as usize);
+        self.convert.set_dst_rate(info.sample_rate);
         Ok(())
     }
 
@@ -151,7 +144,7 @@ impl Source for Symph {
         Some(DeviceConfig {
             channel_count: spec.channels().count() as u32,
             sample_rate: spec.rate(),
-            sample_format: match dec {
+            sample_format: self.sample_format.unwrap_or(match dec {
                 GenericAudioBufferRef::U8(_) => SampleFormat::U8,
                 GenericAudioBufferRef::U16(_) => SampleFormat::U16,
                 GenericAudioBufferRef::U24(_) => SampleFormat::I24,
@@ -162,12 +155,12 @@ impl Source for Symph {
                 GenericAudioBufferRef::S32(_) => SampleFormat::I32,
                 GenericAudioBufferRef::F32(_) => SampleFormat::F32,
                 GenericAudioBufferRef::F64(_) => SampleFormat::F32,
-            },
+            }),
         })
     }
 
     fn volume(&mut self, volume: VolumeIterator) -> bool {
-        self.volume = volume;
+        self.convert.set_volume(volume);
         true
     }
 
@@ -212,7 +205,7 @@ impl Source for Symph {
 
 impl Symph {
     /// Continues decoding the audio
-    fn decode<T: UniSample>(
+    fn decode<T: UniSample + 'static>(
         &mut self,
         mut buffer: &mut [T],
     ) -> (usize, Result<(), Error>)
@@ -267,8 +260,8 @@ impl Symph {
             break match self.decoder.decode(&packet) {
                 Ok(d) => {
                     let spec = d.spec();
-                    self.source_sample_rate = spec.rate();
-                    self.source_channels = spec.channels().count() as u32;
+                    self.convert.set_src_channels(spec.channels().count());
+                    self.convert.set_src_rate(spec.rate());
                     Ok(true)
                 }
                 // Try to recover from recoverable errors.
@@ -289,7 +282,7 @@ impl Symph {
 
     /// reads from the decoders buffer into the given buffer, returns number
     /// of written samples
-    fn read_buffer<T: UniSample>(
+    fn read_buffer<T: UniSample + 'static>(
         &mut self,
         buffer: &mut &mut [T],
         start: usize,
@@ -302,79 +295,53 @@ impl Symph {
         }
 
         let samples = self.decoder.last_decoded();
-        let mut i = 0;
 
         macro_rules! arm {
-            ($mnam:ident, $map:expr, $src:ident) => {{
-                let mut len = 0;
-                let mut last_index = 0;
-                for s in do_channels_rate(
-                    interleave($src.iter_planes().map(|i| {
-                        let slice =
-                            &i[start / self.source_channels as usize..];
-                        len += slice.len();
-                        slice.iter()
-                    }))
-                    .map(|$mnam| {
-                        last_index += 1;
-                        $map
-                    }),
-                    self.source_channels,
-                    self.target_channels,
-                    self.source_sample_rate,
-                    self.target_sample_rate,
-                ) {
-                    buffer[i] = T::from_sample(s)
-                        .mul_amp(self.volume.next_vol().into());
-                    i += 1;
-                    if i == buffer.len() {
-                        break;
-                    }
-                }
+            ($src:ident) => {{
+                let (rd, wrt) = self.convert.from_planes($src, start, *buffer);
 
-                self.buffer_start = if last_index == len {
+                self.buffer_start = if $src[0].len() == rd + start {
                     None
                 } else {
-                    Some(last_index + start)
-                }
+                    Some(rd + start)
+                };
+                wrt
             }};
         }
 
         match samples {
-            GenericAudioBufferRef::U8(src) => arm!(s, *s, src),
-            GenericAudioBufferRef::U16(src) => arm!(s, *s, src),
+            GenericAudioBufferRef::U8(src) => arm!(src),
+            GenericAudioBufferRef::U16(src) => arm!(src),
             GenericAudioBufferRef::U24(src) => {
-                arm!(s, U24::new(s.clamped().0 as i32).unwrap(), src)
+                let src = PlanesTransmute(src);
+                let src = &src;
+                arm!(src)
             }
-            GenericAudioBufferRef::U32(src) => arm!(s, *s, src),
-            GenericAudioBufferRef::S8(src) => arm!(s, *s, src),
-            GenericAudioBufferRef::S16(src) => arm!(s, *s, src),
+            GenericAudioBufferRef::U32(src) => arm!(src),
+            GenericAudioBufferRef::S8(src) => arm!(src),
+            GenericAudioBufferRef::S16(src) => arm!(src),
             GenericAudioBufferRef::S24(src) => {
-                arm!(s, I24::new(s.clamped().0).unwrap(), src)
+                let src = PlanesTransmute(src);
+                let src = &src;
+                arm!(src)
             }
-            GenericAudioBufferRef::S32(src) => arm!(s, *s, src),
-            GenericAudioBufferRef::F32(src) => arm!(s, *s, src),
-            GenericAudioBufferRef::F64(src) => arm!(s, *s, src),
+            GenericAudioBufferRef::S32(src) => arm!(src),
+            GenericAudioBufferRef::F32(src) => arm!(src),
+            GenericAudioBufferRef::F64(src) => arm!(src),
         }
-
-        i
     }
 }
 
 impl Debug for Symph {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Symph")
-            .field("target_sample_rate", &self.target_sample_rate)
-            .field("target_channels", &self.target_channels)
-            .field("source_sample_rate", &self.source_sample_rate)
-            .field("source_channels", &self.source_channels)
+            .field("convert", &self.convert)
             .field("probed", &"Box<dyn FormatReader>")
             .field("decoder", &"Box<dyn AudioDecoder>")
             .field("track_id", &self.track_id)
             .field("time_base", &self.time_base)
             .field("duration", &self.duration)
             .field("buffer_start", &self.buffer_start)
-            .field("volume", &self.volume)
             .field("last_ts", &self.last_ts)
             .field("err_callback", &self.err_callback)
             .finish()

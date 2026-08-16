@@ -15,6 +15,7 @@ categories = ["multimedia::audio"]
 [dependencies]
 anyhow = "1.0.102"
 cpal = "0.17.3"
+dasp_sample = "0.11.0"
 num = "0.4.3"
 serde = { version = "1.0.228", features = ["std", "derive"], optional = true }
 symphonia = { version = "0.6.0", features = ["all"] }

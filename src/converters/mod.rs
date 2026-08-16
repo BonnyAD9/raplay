@@ -2,10 +2,13 @@ use cpal::{FromSample, I24, Sample, U24};
 use num::{Float, NumCast, ToPrimitive};
 
 mod channel;
+mod convert;
+mod filter;
 mod interleave;
+mod lin_resample;
 mod rate;
 
-pub use self::{channel::*, interleave::*, rate::*};
+pub use self::{channel::*, convert::*, filter::*, interleave::*, rate::*};
 
 /// Craetes iterator that interleaves the channels of `i`
 pub fn interleave<S, I: Iterator<Item = S>, II: Iterator<Item = I>>(

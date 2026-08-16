@@ -59,10 +59,10 @@ pub use self::{
 mod tests {
     /*use std::{fs::File, io::stdin, path::Path, thread, time::Duration};
 
-    use crate::{BufferSize, Sink, err::Error, source::Symph};
+    use crate::{BufferSize, Sink, err::Error, source::{DeviceConfig, Symph}};
 
     use anyhow::Result;
-    use cpal::traits::DeviceTrait;
+    use cpal::{SampleFormat, traits::DeviceTrait};
 
     #[test]
     fn play_audio() -> Result<()> {
@@ -72,25 +72,33 @@ mod tests {
         sink.volume(0.3 * 0.3)?;
         sink.prefetch_notify(Duration::from_secs(1))?;
 
-        let src = open_symph("music/4tet - 4th -03 Air.mp3")?;
+        // let src = open_symph("music/4tet - 4th -03 Air.mp3")?;
         let src1 = open_symph(
             "music/Jacob Collier - Djesse Vol. 4/01. 100,000 Voices.flac",
         )?;
+        // let src1 = open_symph(
+        //     "/home/kubas/music/Coldplay - A Head Full of Dreams - 02 Birds.flac",
+        // )?;
         let src2 = open_symph(
             "music/Jacob Collier - Djesse Vol. 4/02. She Put Sunshine.flac",
         )?;
         /*for i in Sink::list_devices()? {
             println!("{}", i.name()?);
         }*/
-        sink.load(Box::new(src1), true)?;
+        //sink.load(Box::new(src1), true)?;
+        sink.load_force_config(Box::new(src1), true, Some(DeviceConfig {
+            channel_count: 2,
+            sample_rate: 5000,
+            sample_format: SampleFormat::F32,
+        }))?;
         sink.prefetch(Some(Box::new(src2)))?;
         sink.set_fade_len(Duration::from_millis(200))?;
-        sink.seek_to(Duration::from_secs(60 * 4 + 40))?;
+        //sink.seek_to(Duration::from_secs(60 * 4 + 40))?;
         //thread::sleep(Duration::MAX);
         loop {
             let mut s = String::new();
             _ = stdin().read_line(&mut s);
-            //sink.play(!sink.is_playing()?)?;
+            sink.play(!sink.is_playing()?)?;
             let ts = sink.get_timestamp()?;
             println!("{:?}/{:?}", ts.current, ts.total);
         }

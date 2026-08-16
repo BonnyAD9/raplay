@@ -1,5 +1,21 @@
 # Changelog
 
+## future
+### New features
+- Add new converter as `converters::Convert` which is capable of converting
+  channel count, rate, sample type, volume and do interleaving. This new
+  converter is much easier to use and should be faster than the previous
+  converters based on stacking iterators.
+- Add resampler `converters::LinResample`.
+- Add generic FIR filter `converters::Filter`.
+- Add new load functions for sink: `load_force_config` and
+  `try_load_force_config` which may optionally force device configuration.
+
+### Changes
+- `dasp_sample` is now fully reexported.
+- `Symph` source now uses the new converter.
+- `source::symph::Options` can now specify output sample format to request.
+
 ## v0.5.0
 ### Breaking changes
 - Because of the update to newer symhonia version, the configuration of the
