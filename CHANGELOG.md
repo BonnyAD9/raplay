@@ -1,6 +1,6 @@
 # Changelog
 
-## future
+## v0.5.1
 ### New features
 - Add new converter as `converters::Convert` which is capable of converting
   channel count, rate, sample type, volume and do interleaving. This new
