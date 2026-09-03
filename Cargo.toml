@@ -13,13 +13,13 @@ categories = ["multimedia::audio"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.102"
-cpal = "0.17.3"
+anyhow = "1.0.104"
+cpal = "0.18.2"
 dasp_sample = "0.11.0"
 num = "0.4.3"
-serde = { version = "1.0.228", features = ["std", "derive"], optional = true }
-symphonia = { version = "0.6.0", features = ["all"] }
-thiserror = "2.0.18"
+serde = { version = "1.0.229", features = ["std", "derive"], optional = true }
+symphonia = { version = "0.6.1", features = ["all"] }
+thiserror = "2.0.20"
 
 [features]
 default = []

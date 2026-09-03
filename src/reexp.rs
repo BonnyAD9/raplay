@@ -1,8 +1,4 @@
-pub use cpal::{
-    BuildStreamError, DefaultStreamConfigError, DevicesError,
-    PauseStreamError, PlayStreamError, SampleFormat, StreamError,
-    SupportedStreamConfigsError,
-};
+pub use cpal::{Error, SampleFormat};
 
 pub use anyhow::Result as AnyhowResult;
 

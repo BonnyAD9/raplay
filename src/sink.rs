@@ -80,7 +80,7 @@ impl Sink {
         macro_rules! arm {
             ($t:ident, $e:ident) => {
                 device.build_output_stream(
-                    &config,
+                    config,
                     move |d: &mut [$t], info| {
                         mixer.mix(
                             &mut SampleBufferMut::$e(d),
@@ -678,6 +678,5 @@ fn get_play_time(info: &OutputCallbackInfo) -> Instant {
     now + info
         .timestamp()
         .playback
-        .duration_since(&info.timestamp().callback)
-        .unwrap_or_default()
+        .duration_since(info.timestamp().callback)
 }

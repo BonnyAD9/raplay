@@ -2,12 +2,6 @@ use thiserror::Error;
 
 use crate::source::symph;
 
-use cpal::{
-    BuildStreamError, DefaultStreamConfigError, DevicesError,
-    PauseStreamError, PlayStreamError, StreamError,
-    SupportedStreamConfigsError,
-};
-
 /// Result with this crate error type [`enum@Error`]
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -38,7 +32,7 @@ pub enum Error {
     NoPrefetchedSource,
     /// Cpal errors
     #[error(transparent)]
-    Cpal(#[from] CpalError),
+    Cpal(#[from] cpal::Error),
     /// Errors from the [`crate::source::Symph`] source
     #[error(transparent)]
     Symph(#[from] symph::Error),
@@ -62,33 +56,3 @@ impl<T> From<std::sync::PoisonError<T>> for Error {
         Self::PoisonError
     }
 }
-
-macro_rules! impl_cpal {
-    ($($i:ident -> $t:ty),+ $(,)?) => {
-        $(
-            impl From<$t> for Error {
-                fn from(value: $t) -> Self {
-                    Self::Cpal(value.into())
-                }
-            }
-        )+
-
-        #[derive(Error, Debug)]
-        pub enum CpalError {
-            $(
-                #[error(transparent)]
-                $i(#[from] $t),
-            )+
-        }
-    };
-}
-
-impl_cpal!(
-    DefaultStreamConfig -> DefaultStreamConfigError,
-    Stream -> StreamError,
-    BuildStream -> BuildStreamError,
-    PlayStream -> PlayStreamError,
-    SupportedConfigs -> SupportedStreamConfigsError,
-    PauseStreamError -> PauseStreamError,
-    DevicesError -> DevicesError,
-);
