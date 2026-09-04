@@ -1,4 +1,4 @@
-pub use cpal::{Error, SampleFormat};
+pub use cpal::{Error, ErrorKind, SampleFormat};
 
 pub use anyhow::Result as AnyhowResult;
 

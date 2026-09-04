@@ -1,6 +1,11 @@
 # Changelog
 
-## v0.5.1
+## v0.6.0
+### Breaking changes
+- `source::symph::Options` can now specify output sample format to request.
+- `source::symph::Options` is now marked with `non_exhaustive`.
+- Cpal are now united under cpal.
+
 ### New features
 - Add new converter as `converters::Convert` which is capable of converting
   channel count, rate, sample type, volume and do interleaving. This new
@@ -14,7 +19,10 @@
 ### Changes
 - `dasp_sample` is now fully reexported.
 - `Symph` source now uses the new converter.
-- `source::symph::Options` can now specify output sample format to request.
+
+## v0.5.1
+This realease has been yanked and rereleased as v0.6.0 because it had
+unintentional breaking changes.
 
 ## v0.5.0
 ### Breaking changes
