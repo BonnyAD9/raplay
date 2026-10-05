@@ -1,10 +1,14 @@
 # Changelog
 
 ## future
+### New features
 - Add shortcut method for opening files with `Symph::open`.
 - Add `Sink::new`.
 - Add features to specify audio backend: `asio`, `audioworklet`, `jack`,
   `pipewire`, `pulseaudio`.
+
+### Changes
+- Reexport trait `MediaSource` from symphonia.
 
 ## v0.6.0
 ### Breaking changes

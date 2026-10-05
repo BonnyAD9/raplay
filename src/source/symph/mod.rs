@@ -12,7 +12,7 @@ use symphonia::{
         audio::GenericAudioBufferRef,
         codecs::{CodecParameters, audio::AudioDecoder},
         formats::{FormatReader, SeekMode, SeekTo, TrackType},
-        io::{MediaSource, MediaSourceStream, MediaSourceStreamOptions},
+        io::{MediaSourceStream, MediaSourceStreamOptions},
         units::{self, Time, TimeBase, Timestamp},
     },
     default::{get_codecs, get_probe},
@@ -27,6 +27,8 @@ use crate::{
 };
 
 use super::{DeviceConfig, Source, VolumeIterator};
+
+pub use symphonia::core::io::MediaSource;
 
 /// Source that decodes audio using symphonia decoder
 pub struct Symph {
