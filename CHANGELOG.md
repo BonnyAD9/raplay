@@ -1,5 +1,11 @@
 # Changelog
 
+## future
+- Add shortcut method for opening files with `Symph::open`.
+- Add `Sink::new`.
+- Add features to specify audio backend: `asio`, `audioworklet`, `jack`,
+  `pipewire`, `pulseaudio`.
+
 ## v0.6.0
 ### Breaking changes
 - `source::symph::Options` can now specify output sample format to request.

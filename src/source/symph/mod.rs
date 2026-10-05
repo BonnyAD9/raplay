@@ -4,7 +4,7 @@ mod planes_transmute;
 
 pub use self::{err::*, options::*};
 
-use std::{fmt::Debug, time::Duration};
+use std::{fmt::Debug, fs::File, path::Path, time::Duration};
 
 use cpal::SampleFormat;
 use symphonia::{
@@ -106,6 +106,20 @@ impl Symph {
             last_ts: Timestamp::ZERO,
             err_callback: Callback::default(),
         })
+    }
+
+    /// Create new symphonia source by reading the given file.
+    ///
+    /// # Errors
+    /// - Io error on opening the file.
+    /// - The format of the source cannot be determined.
+    /// - No default track is found.
+    /// - No decoder was found for the codec, insufficient codec parameters.
+    pub fn open(p: impl AsRef<Path>, opts: &Options) -> cerr::Result<Self> {
+        Self::try_new(
+            File::open(p).map_err(|e| Error::SymphInner(e.into()))?,
+            opts,
+        )
     }
 }
 

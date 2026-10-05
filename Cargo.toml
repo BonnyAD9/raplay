@@ -19,8 +19,16 @@ dasp_sample = "0.11.0"
 num = "0.4.3"
 serde = { version = "1.0.229", features = ["std", "derive"], optional = true }
 symphonia = { version = "0.6.1", features = ["all"] }
-thiserror = "2.0.20"
+thiserror = "2.0.21"
 
 [features]
 default = []
 serde = ["dep:serde"]
+asio = ["cpal/asio"]
+audioworklet = ["cpal/audioworklet"]
+jack = ["cpal/jack"]
+pipewire = ["cpal/pipewire"]
+pulseaudio = ["cpal/pulseaudio"]
+
+[dev-dependencies]
+flexi_logger = "0.31.10"

@@ -121,6 +121,11 @@ impl Sink {
         Ok(())
     }
 
+    /// Create new sink.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     /// Sets the callback function. Returns previous callback function.
     ///
     /// The function is called when playback event occurs. For example when
