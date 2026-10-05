@@ -1,6 +1,6 @@
 # Changelog
 
-## future
+## v0.6.1
 ### New features
 - Add shortcut method for opening files with `Symph::open`.
 - Add `Sink::new`.
